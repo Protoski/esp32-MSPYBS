@@ -70,7 +70,7 @@ export default function HospitalDashboard() {
       {latest && hospital && <AlertBanner latest={latest} hospital={hospital} />}
 
       <Section icon="⚗️" title="Planta PSA — Oxígeno Medicinal">
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mb-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
           <GaugeChart value={latest?.o2_purity_pct ?? 0} min={80} max={100} label="Pureza O₂" unit="% O₂"
             status={latest ? o2PurityStatus(latest.o2_purity_pct, th?.o2_purity_warn, th?.o2_purity_critical) : 'neutral'}
             marks={[{ value: th?.o2_purity_warn ?? 93, color: '#f59e0b' }, { value: th?.o2_purity_critical ?? 90, color: '#ef4444' }]} />
