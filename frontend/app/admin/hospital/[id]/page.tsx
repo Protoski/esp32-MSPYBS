@@ -75,7 +75,7 @@ export default function HospitalConfigPage() {
           {[{label:'Nombre',key:'nombre'},{label:'Ciudad',key:'ciudad'},{label:'Dirección',key:'direccion'}].map(({ label, key }) => (
             <div key={key} className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-400">{label}</label>
-              <input value={(form as Record<string,unknown>)[key] as string ?? ''}
+              <input value={(form as unknown as Record<string,string>)[key] ?? ''}
                 onChange={e => setForm(f => f ? ({ ...f, [key]: e.target.value }) : f)} className={inp} />
             </div>
           ))}
