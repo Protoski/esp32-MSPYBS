@@ -10,7 +10,6 @@ body {
   @apply bg-slate-900 text-slate-100 antialiased;
 }
 
-/* Scrollbar oscura */
 ::-webkit-scrollbar       { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: #0f172a; }
 ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }

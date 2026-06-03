@@ -1,29 +1,66 @@
-/**
- * Capa de acceso a datos.
- * Lee la URL del backend desde la variable de entorno para que
- * jamás quede escrita en el código fuente del repositorio público.
- */
+import type {
+  ApiDataResponse,
+  ApiHospitalsResponse,
+  ApiCommandResponse,
+  Hospital,
+} from '@/types/plant';
 
-import type { ApiResponse } from '@/types/plant';
+const BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
+if (!BASE && typeof window !== 'undefined') {
+  console.warn('[API] NEXT_PUBLIC_API_URL no definida.');
+}
 
-export async function fetchPlantData(): Promise<ApiResponse> {
-  if (!API_URL) {
-    throw new Error(
-      'NEXT_PUBLIC_API_URL no está definida. ' +
-      'Añádela en .env.local (desarrollo) o en el panel de Vercel (producción).'
-    );
-  }
+async function apiFetch<T>(params: Record<string, string>): Promise<T> {
+  const url = new URL(BASE);
+  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+  const res = await fetch(url.toString(), { cache: 'no-store' });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
 
-  const res = await fetch(API_URL, {
-    // "no-store" para que cada poll obtenga datos frescos sin caché
-    cache: 'no-store',
+async function apiPost<T>(body: Record<string, unknown>): Promise<T> {
+  const res = await fetch(BASE, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify(body),
   });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
 
-  if (!res.ok) {
-    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-  }
+export async function fetchPlantData(hospitalId: string): Promise<ApiDataResponse> {
+  return apiFetch<ApiDataResponse>({ action: 'data', hospital_id: hospitalId });
+}
 
-  return res.json() as Promise<ApiResponse>;
+export async function fetchAllLatest(): Promise<ApiDataResponse> {
+  return apiFetch<ApiDataResponse>({ action: 'latest_all' });
+}
+
+export async function fetchHospitals(): Promise<ApiHospitalsResponse> {
+  return apiFetch<ApiHospitalsResponse>({ action: 'hospitals' });
+}
+
+export async function createHospital(
+  data: Omit<Hospital, 'id' | 'created_at'>
+): Promise<ApiCommandResponse> {
+  return apiPost<ApiCommandResponse>({ action: 'add_hospital', ...data });
+}
+
+export async function toggleHospital(
+  id: string,
+  activo: boolean
+): Promise<ApiCommandResponse> {
+  return apiPost<ApiCommandResponse>({ action: 'toggle_hospital', id, activo });
+}
+
+export async function deleteHospital(id: string): Promise<ApiCommandResponse> {
+  return apiPost<ApiCommandResponse>({ action: 'delete_hospital', id });
+}
+
+export async function updateHospital(
+  id: string,
+  data: Partial<Omit<Hospital, 'id' | 'created_at'>>
+): Promise<ApiCommandResponse> {
+  return apiPost<ApiCommandResponse>({ action: 'update_hospital', id, ...data });
 }
