@@ -23,10 +23,12 @@ async function apiFetch<T>(params: Record<string, string>): Promise<T> {
 }
 
 async function apiPost<T>(body: Record<string, unknown>): Promise<T> {
+  // Content-Type text/plain evita el preflight CORS de Google Apps Script
   const res = await fetch(BASE, {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify(body),
+    method:   'POST',
+    headers:  { 'Content-Type': 'text/plain;charset=utf-8' },
+    body:     JSON.stringify(body),
+    redirect: 'follow',
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
