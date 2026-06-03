@@ -22,12 +22,11 @@
 #include <ArduinoJson.h>
 
 // ── CONFIGURACIÓN DE RED ────────────────────────────────────
-const char* WIFI_SSID     = "TU_SSID_WIFI";
-const char* WIFI_PASSWORD = "TU_PASSWORD_WIFI";
+const char* WIFI_SSID     = "Familia CabralE";
+const char* WIFI_PASSWORD = "232174";
 
 // ── URL DEL BACKEND (Google Apps Script) ───────────────────
-// Reemplaza con la URL de implementación de tu Apps Script
-const char* API_URL = "https://script.google.com/macros/s/REEMPLAZAR_CON_TU_DEPLOYMENT_ID/exec";
+const char* API_URL = "https://script.google.com/macros/s/AKfycby0PXjgE7OZu17b162eEKmWzk0J6px7W4fBaiIZbzZ43eXq12_7NUfOlQ46drYPidcn/exec";
 
 // ── INTERVALO DE ENVÍO ─────────────────────────────────────
 const unsigned long SEND_INTERVAL_MS = 5000; // cada 5 segundos
@@ -143,7 +142,7 @@ void sendData() {
 
   HTTPClient http;
   http.begin(API_URL);
-  http.addHeader("Content-Type", "application/json");
+  http.addHeader("Content-Type", "text/plain;charset=utf-8");
 
   // ⚡ CRÍTICO: Google redirige con 302 → se debe seguir la redirección
   http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
