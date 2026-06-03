@@ -16,7 +16,10 @@ async function apiFetch<T>(params: Record<string, string>): Promise<T> {
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
   const res = await fetch(url.toString(), { cache: 'no-store' });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  const data = await res.json();
+  if (data.hospitals === undefined) data.hospitals = [];
+  if (data.rows      === undefined) data.rows = [];
+  return data;
 }
 
 async function apiPost<T>(body: Record<string, unknown>): Promise<T> {
