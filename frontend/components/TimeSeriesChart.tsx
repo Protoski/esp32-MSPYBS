@@ -17,10 +17,11 @@ import {
   Tooltip,
   Legend,
   Filler,
-  TimeScale,
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
 
+// Registra sólo los módulos que usamos (sin TimeScale para evitar
+// la dependencia de chartjs-adapter-date-fns que no está instalada).
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -30,7 +31,6 @@ ChartJS.register(
   Tooltip,
   Legend,
   Filler,
-  TimeScale,
 );
 
 export interface ChartSeries {
@@ -99,8 +99,9 @@ export default function TimeSeriesChart({
         titleColor:      '#94a3b8',
         bodyColor:       '#e2e8f0',
         callbacks: {
-          label: (ctx: { dataset: { label?: string }; parsed: { y: number } }) =>
-            ` ${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)} ${yUnit}`,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          label: (ctx: any) =>
+            ` ${ctx.dataset.label}: ${Number(ctx.parsed.y).toFixed(2)} ${yUnit}`,
         },
       },
       // Línea de umbral como anotación manual en datasets
@@ -120,7 +121,8 @@ export default function TimeSeriesChart({
         ticks: {
           color:    '#64748b',
           font:     { size: 10 },
-          callback: (v: number | string) => `${v} ${yUnit}`,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          callback: (v: any) => `${v} ${yUnit}`,
         },
         grid: { color: '#1e293b' },
       },
