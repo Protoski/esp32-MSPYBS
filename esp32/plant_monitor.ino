@@ -28,6 +28,10 @@ const char* WIFI_PASSWORD = "232174";
 // ── URL DEL BACKEND (Google Apps Script) ───────────────────
 const char* API_URL = "https://script.google.com/macros/s/AKfycby0PXjgE7OZu17b162eEKmWzk0J6px7W4fBaiIZbzZ43eXq12_7NUfOlQ46drYPidcn/exec";
 
+// ── ID DEL HOSPITAL ────────────────────────────────────────
+// Crea un hospital desde el panel admin y copia aquí su ID
+const char* HOSPITAL_ID = "REEMPLAZAR_CON_ID_HOSPITAL";
+
 // ── INTERVALO DE ENVÍO ─────────────────────────────────────
 const unsigned long SEND_INTERVAL_MS = 5000; // cada 5 segundos
 
@@ -121,6 +125,8 @@ void sendData() {
   // Construye el documento JSON (capacidad generosa para evitar truncamiento)
   StaticJsonDocument<512> doc;
 
+  doc["action"]                = "data";
+  doc["hospital_id"]           = HOSPITAL_ID;
   doc["o2_flow_m3h"]           = readO2Flow();
   doc["tower_a_pressure_bar"]  = readTowerAPressure();
   doc["tower_b_pressure_bar"]  = readTowerBPressure();
