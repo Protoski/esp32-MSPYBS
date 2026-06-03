@@ -21,7 +21,9 @@ export default function OverviewPage() {
           try {
             const { rows } = await fetchPlantData(h.id);
             const latest   = rows[rows.length - 1] ?? null;
-            const isOnline = rows.length > 0;
+            // En línea si el último dato llegó hace menos de 60 s (ESP32 envía cada 5 s)
+            const ageMs    = latest?.timestamp ? Date.now() - new Date(latest.timestamp).getTime() : Infinity;
+            const isOnline = ageMs < 60_000;
             const activeAlerts = latest ? buildAlerts(latest, h).length : 0;
             return { hospital: h, latest, isOnline, activeAlerts } as HospitalSummary;
           } catch {
