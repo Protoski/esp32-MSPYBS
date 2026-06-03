@@ -1,0 +1,28 @@
+# Dependencias
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+
+# Variables de entorno locales (NUNCA subir al repositorio)
+frontend/.env
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Cache
+.eslintcache
