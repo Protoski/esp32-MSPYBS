@@ -21,7 +21,7 @@ export default function OverviewPage() {
           try {
             const { rows } = await fetchPlantData(h.id);
             const latest   = rows[rows.length - 1] ?? null;
-            const isOnline = latest ? Date.now() - new Date(latest.timestamp ?? 0).getTime() < 120_000 : false;
+            const isOnline = latest ? Date.now() - new Date(latest.timestamp ?? 0).getTime() < 300_000 : false;
             const activeAlerts = latest ? buildAlerts(latest, h).length : 0;
             return { hospital: h, latest, isOnline, activeAlerts } as HospitalSummary;
           } catch {
