@@ -9,15 +9,17 @@
  *   - HTTPClient.h (incluida en el core ESP32)
  *
  * NOTAS IMPORTANTES:
- *  - setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS) es
- *    obligatorio: Google Apps Script responde con HTTP 302
- *    antes de entregar la respuesta real.
+ *  - Google Apps Script responde a un POST con un redirect 302
+ *    hacia script.googleusercontent.com. Seguirlo automáticamente
+ *    reenvía el POST y provoca "400 Bad Request", por eso aquí el
+ *    redirect se sigue manualmente con un GET (ver sendData()).
  *  - En producción, reemplaza los valores simulados por lecturas
  *    reales de tus sensores (ADC, Modbus, I2C, etc.).
  * ============================================================
  */
 
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 
@@ -146,23 +148,58 @@ void sendData() {
   Serial.println("[HTTP] Enviando payload:");
   Serial.println(jsonBody);
 
-  HTTPClient http;
-  http.begin(API_URL);
-  http.addHeader("Content-Type", "text/plain;charset=utf-8");
+  // ⚡ Google Apps Script responde a un POST con un redirect 302 hacia
+  // script.googleusercontent.com. El seguimiento automático de redirects
+  // del ESP32 reenvía el POST a esa URL, que devuelve "400 Bad Request".
+  // Solución: seguir el redirect manualmente:
+  //   1) POST a /exec con redirects DESACTIVADOS  → leemos cabecera Location
+  //   2) GET a la URL de Location                 → respuesta real del script
+  WiFiClientSecure client;
+  client.setInsecure();              // sin validación de certificado (suficiente aquí)
 
-  // ⚡ CRÍTICO: Google redirige con 302 → se debe seguir la redirección
-  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+  HTTPClient http;
+  http.begin(client, API_URL);
+  http.addHeader("Content-Type", "text/plain;charset=utf-8");
+  http.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
+
+  // Pedimos que se nos exponga la cabecera Location del redirect
+  const char* headerKeys[] = { "Location" };
+  http.collectHeaders(headerKeys, 1);
 
   int httpCode = http.POST(jsonBody);
+  Serial.printf("[HTTP] POST código: %d\n", httpCode);
 
-  if (httpCode > 0) {
-    String response = http.getString();
-    Serial.printf("[HTTP] Código: %d | Respuesta: %s\n", httpCode, response.c_str());
+  if (httpCode == HTTP_CODE_FOUND || httpCode == HTTP_CODE_MOVED_PERMANENTLY ||
+      httpCode == HTTP_CODE_SEE_OTHER || httpCode == HTTP_CODE_TEMPORARY_REDIRECT) {
+    // Redirect esperado → seguirlo con un GET manual
+    String location = http.header("Location");
+    http.end();
+    Serial.println("[HTTP] Redirect → " + location);
+
+    if (location.length() > 0) {
+      WiFiClientSecure client2;
+      client2.setInsecure();
+      HTTPClient http2;
+      http2.begin(client2, location);
+      http2.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+      int code2 = http2.GET();
+      if (code2 > 0) {
+        Serial.printf("[HTTP] OK %d | Respuesta: %s\n", code2, http2.getString().c_str());
+      } else {
+        Serial.printf("[HTTP] ERROR GET: %s\n", http2.errorToString(code2).c_str());
+      }
+      http2.end();
+    } else {
+      Serial.println("[HTTP] ERROR: redirect sin cabecera Location");
+    }
+  } else if (httpCode > 0) {
+    // Sin redirect (poco común) → ya tenemos la respuesta
+    Serial.printf("[HTTP] Respuesta directa: %s\n", http.getString().c_str());
+    http.end();
   } else {
-    Serial.printf("[HTTP] ERROR: %s\n", http.errorToString(httpCode).c_str());
+    Serial.printf("[HTTP] ERROR POST: %s\n", http.errorToString(httpCode).c_str());
+    http.end();
   }
-
-  http.end();
 }
 
 // ============================================================
