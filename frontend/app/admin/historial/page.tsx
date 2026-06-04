@@ -40,6 +40,7 @@ export default function HistorialPage() {
   const [sortCol, setSortCol]           = useState<string>('timestamp');
   const [sortAsc, setSortAsc]           = useState(false);
 
+  // Cargar lista de hospitales al montar
   const loadHospitals = useCallback(async () => {
     try {
       const { hospitals: hs } = await fetchHospitals();
@@ -62,6 +63,7 @@ export default function HistorialPage() {
     } finally { setLoading(false); }
   }, [selectedHospital]);
 
+  // Filtrar + ordenar
   const filtered = useMemo(() => {
     let data = [...rows];
 
@@ -131,6 +133,7 @@ export default function HistorialPage() {
         </button>
       </div>
 
+      {/* Filtros */}
       <div className="rounded-xl border border-slate-700 bg-slate-800/60 p-4 space-y-4">
         <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Filtros de búsqueda</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -177,6 +180,7 @@ export default function HistorialPage() {
 
       {error && <div className="rounded-xl bg-red-500/10 border border-red-500/30 px-4 py-3 text-sm text-red-400">{error}</div>}
 
+      {/* Tabla */}
       {rows.length === 0 && !loading ? (
         <div className="rounded-xl border border-dashed border-slate-700 p-12 text-center">
           <p className="text-3xl mb-3">📋</p>
@@ -222,6 +226,7 @@ export default function HistorialPage() {
             </table>
           </div>
 
+          {/* Paginación */}
           {totalPages > 1 && (
             <div className="flex items-center justify-between px-4 py-3 bg-slate-800/60 border-t border-slate-700">
               <span className="text-xs text-slate-500">
