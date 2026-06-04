@@ -14,6 +14,7 @@ if (!BASE && typeof window !== 'undefined') {
 async function apiFetch<T>(params: Record<string, string>): Promise<T> {
   const url = new URL(BASE);
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+  url.searchParams.set('_t', Date.now().toString()); // evita caché de Google Apps Script
   const res = await fetch(url.toString(), { cache: 'no-store' });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = await res.json();

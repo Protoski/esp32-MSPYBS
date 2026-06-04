@@ -50,11 +50,8 @@ export default function HospitalDashboard() {
     if (!rawLatest?.timestamp) return false;
     const latestMs = new Date(rawLatest.timestamp).getTime();
     const ageMs    = Date.now() - latestMs;
-    if (rawPrev?.timestamp) {
-      const intervalMs = Math.abs(latestMs - new Date(rawPrev.timestamp).getTime());
-      return intervalMs > 0 && ageMs >= 0 && ageMs < intervalMs * 3;
-    }
-    return ageMs >= 0 && ageMs < 30_000;
+    // Considerado "en línea" si el último dato llegó hace menos de 60 segundos
+    return ageMs >= 0 && ageMs < 60_000;
   })();
 
   const latest = isOnline ? rawLatest : undefined;

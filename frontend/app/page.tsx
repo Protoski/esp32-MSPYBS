@@ -25,20 +25,8 @@ export default function OverviewPage() {
 
             let isOnline = false;
             if (latest?.timestamp) {
-              const latestMs   = new Date(latest.timestamp).getTime();
-              const nowMs      = Date.now();
-              const ageMs      = nowMs - latestMs;
-
-              if (prev?.timestamp) {
-                // Intervalo real medido entre los últimos dos registros
-                const prevMs     = new Date(prev.timestamp).getTime();
-                const intervalMs = Math.abs(latestMs - prevMs);
-                // En línea si llegó dentro de 3 intervalos y el timestamp no es futuro
-                isOnline = intervalMs > 0 && ageMs >= 0 && ageMs < intervalMs * 3;
-              } else {
-                // Solo hay un registro: ventana fija de 30 s
-                isOnline = ageMs >= 0 && ageMs < 30_000;
-              }
+              const ageMs = Date.now() - new Date(latest.timestamp).getTime();
+              isOnline = ageMs >= 0 && ageMs < 60_000;
             }
             const activeAlerts = latest ? buildAlerts(latest, h).length : 0;
             return { hospital: h, latest, isOnline, activeAlerts } as HospitalSummary;
