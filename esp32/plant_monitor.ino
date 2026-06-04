@@ -24,15 +24,15 @@
 #include <ArduinoJson.h>
 
 // ── CONFIGURACIÓN DE RED ────────────────────────────────────
-const char* WIFI_SSID     = "Familia CabralE";
-const char* WIFI_PASSWORD = "232174";
+const char* WIFI_SSID     = "ONYX";
+const char* WIFI_PASSWORD = "oingenieria2019";
 
 // ── URL DEL BACKEND (Google Apps Script) ───────────────────
 const char* API_URL = "https://script.google.com/macros/s/AKfycby0PXjgE7OZu17b162eEKmWzk0J6px7W4fBaiIZbzZ43eXq12_7NUfOlQ46drYPidcn/exec";
 
 // ── ID DEL HOSPITAL ────────────────────────────────────────
 // Crea un hospital desde el panel admin y copia aquí su ID
-const char* HOSPITAL_ID = "REEMPLAZAR_CON_ID_HOSPITAL";
+const char* HOSPITAL_ID = "247957b8-c92e-44f7-8858-819515a14731";
 
 // ── INTERVALO DE ENVÍO ─────────────────────────────────────
 const unsigned long SEND_INTERVAL_MS = 5000; // cada 5 segundos
