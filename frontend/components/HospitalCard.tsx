@@ -6,7 +6,9 @@ import type { HospitalSummary } from '@/types/plant';
 import { o2PurityStatus } from './KPICard';
 
 export default function HospitalCard({ summary }: { summary: HospitalSummary }) {
-  const { hospital, latest, isOnline, activeAlerts } = summary;
+  const { hospital, isOnline, activeAlerts } = summary;
+  // Sin señal → no mostrar valores del último registro
+  const latest = isOnline ? summary.latest : null;
   const purityStatus = latest ? o2PurityStatus(latest.o2_purity_pct, hospital.thresholds.o2_purity_warn, hospital.thresholds.o2_purity_critical) : 'neutral';
 
   return (
