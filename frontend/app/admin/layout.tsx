@@ -10,11 +10,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [unlocked, setUnlocked] = useState(false);
   const [pin, setPin] = useState('');
   const [error, setError] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const path = usePathname();
 
   useEffect(() => {
     if (sessionStorage.getItem('admin_unlocked') === 'true') setUnlocked(true);
   }, []);
+
+  // Cerrar menú al navegar
+  useEffect(() => { setMenuOpen(false); }, [path]);
 
   const handlePin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,30 +54,55 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { href: '/admin/historial',  label: 'Historial',  icon: '📅' },
   ];
 
+  const NavContent = () => (
+    <>
+      <nav className="p-2 space-y-0.5">
+        {navLinks.map(({ href, label, icon }) => (
+          <Link key={href} href={href} className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+            path === href ? 'bg-sky-500/20 text-sky-400' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'}`}>
+            <span>{icon}</span>{label}
+          </Link>
+        ))}
+      </nav>
+      <div className="p-2 border-t border-slate-700">
+        <button onClick={() => { sessionStorage.removeItem('admin_unlocked'); setUnlocked(false); setMenuOpen(false); }}
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all">
+          🔒 Cerrar sesión
+        </button>
+      </div>
+    </>
+  );
+
   return (
-    <div className="flex gap-6">
-      <aside className="w-48 flex-shrink-0 hidden md:block">
-        <div className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden sticky top-20">
-          <div className="px-4 py-3 border-b border-slate-700">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Administración</p>
-          </div>
-          <nav className="p-2 space-y-0.5">
-            {navLinks.map(({ href, label, icon }) => (
-              <Link key={href} href={href} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                path === href ? 'bg-sky-500/20 text-sky-400' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'}`}>
-                <span>{icon}</span>{label}
-              </Link>
-            ))}
-          </nav>
-          <div className="p-2 border-t border-slate-700">
-            <button onClick={() => { sessionStorage.removeItem('admin_unlocked'); setUnlocked(false); }}
-              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all">
-              🔒 Cerrar sesión
-            </button>
-          </div>
+    <div>
+      {/* Barra de navegación móvil */}
+      <div className="md:hidden mb-4">
+        <div className="flex items-center justify-between rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5">
+          <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Administración</p>
+          <button onClick={() => setMenuOpen(o => !o)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-slate-400 hover:text-slate-200 hover:bg-slate-700 transition-all">
+            {menuOpen ? '✕ Cerrar' : '☰ Menú'}
+          </button>
         </div>
-      </aside>
-      <div className="flex-1 min-w-0">{children}</div>
+        {menuOpen && (
+          <div className="mt-1 rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
+            <NavContent />
+          </div>
+        )}
+      </div>
+
+      <div className="flex gap-6">
+        {/* Sidebar solo en desktop */}
+        <aside className="w-48 flex-shrink-0 hidden md:block">
+          <div className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden sticky top-20">
+            <div className="px-4 py-3 border-b border-slate-700">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Administración</p>
+            </div>
+            <NavContent />
+          </div>
+        </aside>
+        <div className="flex-1 min-w-0">{children}</div>
+      </div>
     </div>
   );
 }

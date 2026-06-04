@@ -8,7 +8,7 @@ const fmt = (iso: string | null) =>
   !iso ? '—' : new Date(iso).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'medium', hour12: false });
 
 const fmtDate = (iso: string | null) =>
-  !iso ? '' : new Date(iso).toLocaleDateString('sv-SE'); // YYYY-MM-DD
+  !iso ? '' : new Date(iso).toLocaleDateString('sv-SE');
 
 const COLS = [
   { key: 'timestamp',            label: 'Fecha / Hora',        fmt: (v: unknown) => fmt(v as string) },
@@ -40,7 +40,6 @@ export default function HistorialPage() {
   const [sortCol, setSortCol]           = useState<string>('timestamp');
   const [sortAsc, setSortAsc]           = useState(false);
 
-  // Cargar lista de hospitales al montar
   const loadHospitals = useCallback(async () => {
     try {
       const { hospitals: hs } = await fetchHospitals();
@@ -63,30 +62,20 @@ export default function HistorialPage() {
     } finally { setLoading(false); }
   }, [selectedHospital]);
 
-  // Filtrar + ordenar
   const filtered = useMemo(() => {
     let data = [...rows];
-
-    if (dateFrom) {
-      data = data.filter(r => r.timestamp && fmtDate(r.timestamp) >= dateFrom);
-    }
-    if (dateTo) {
-      data = data.filter(r => r.timestamp && fmtDate(r.timestamp) <= dateTo);
-    }
+    if (dateFrom) data = data.filter(r => r.timestamp && fmtDate(r.timestamp) >= dateFrom);
+    if (dateTo)   data = data.filter(r => r.timestamp && fmtDate(r.timestamp) <= dateTo);
     if (search.trim()) {
       const q = search.toLowerCase();
-      data = data.filter(r =>
-        Object.values(r).some(v => String(v ?? '').toLowerCase().includes(q))
-      );
+      data = data.filter(r => Object.values(r).some(v => String(v ?? '').toLowerCase().includes(q)));
     }
-
     data.sort((a, b) => {
       const av = (a as Record<string, unknown>)[sortCol] ?? '';
       const bv = (b as Record<string, unknown>)[sortCol] ?? '';
       const cmp = String(av).localeCompare(String(bv), undefined, { numeric: true });
       return sortAsc ? cmp : -cmp;
     });
-
     return data;
   }, [rows, dateFrom, dateTo, search, sortCol, sortAsc]);
 
@@ -117,23 +106,22 @@ export default function HistorialPage() {
     URL.revokeObjectURL(url);
   };
 
-  const inp = 'rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500 transition-all';
+  const inp = 'rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-slate-100 outline-none focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500 transition-all';
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-black text-slate-100">Historial de Registros</h1>
+          <h1 className="text-lg sm:text-xl font-black text-slate-100">Historial de Registros</h1>
           <p className="text-xs text-slate-500 mt-0.5">Consulta, filtra y exporta el historial de mediciones</p>
         </div>
         <button onClick={exportCSV} disabled={filtered.length === 0}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-green-600 hover:bg-green-500 disabled:opacity-40 text-white text-sm font-bold transition-colors">
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-green-600 hover:bg-green-500 disabled:opacity-40 text-white text-sm font-bold transition-colors active:scale-95">
           ⬇ Exportar CSV
           {filtered.length > 0 && <span className="bg-green-700 px-1.5 py-0.5 rounded-md text-[10px]">{filtered.length}</span>}
         </button>
       </div>
 
-      {/* Filtros */}
       <div className="rounded-xl border border-slate-700 bg-slate-800/60 p-4 space-y-4">
         <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Filtros de búsqueda</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -162,11 +150,11 @@ export default function HistorialPage() {
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <button onClick={handleSearch} disabled={loading || !selectedHospital}
-            className="px-5 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 disabled:opacity-40 text-white text-sm font-bold transition-colors">
+            className="px-5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 disabled:opacity-40 text-white text-sm font-bold transition-colors active:scale-95">
             {loading ? '⏳ Cargando…' : '🔍 Buscar'}
           </button>
           <button onClick={() => { setDateFrom(''); setDateTo(''); setSearch(''); setPage(1); }}
-            className="px-4 py-2 rounded-xl border border-slate-700 text-slate-400 hover:text-slate-200 text-sm font-semibold transition-all">
+            className="px-4 py-2.5 rounded-xl border border-slate-700 text-slate-400 hover:text-slate-200 text-sm font-semibold transition-all active:scale-95">
             ✕ Limpiar filtros
           </button>
           {rows.length > 0 && (
@@ -180,7 +168,6 @@ export default function HistorialPage() {
 
       {error && <div className="rounded-xl bg-red-500/10 border border-red-500/30 px-4 py-3 text-sm text-red-400">{error}</div>}
 
-      {/* Tabla */}
       {rows.length === 0 && !loading ? (
         <div className="rounded-xl border border-dashed border-slate-700 p-12 text-center">
           <p className="text-3xl mb-3">📋</p>
@@ -189,7 +176,7 @@ export default function HistorialPage() {
         </div>
       ) : (
         <div className="rounded-xl border border-slate-700 overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto -webkit-overflow-scrolling-touch">
             <table className="w-full text-xs min-w-[900px]">
               <thead className="bg-slate-800/80 sticky top-0 z-10">
                 <tr>
@@ -226,30 +213,29 @@ export default function HistorialPage() {
             </table>
           </div>
 
-          {/* Paginación */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3 bg-slate-800/60 border-t border-slate-700">
+            <div className="flex items-center justify-between px-4 py-3 bg-slate-800/60 border-t border-slate-700 flex-wrap gap-2">
               <span className="text-xs text-slate-500">
-                Página {page} de {totalPages} · Mostrando {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} de {filtered.length}
+                Página {page} de {totalPages} · {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} de {filtered.length}
               </span>
               <div className="flex items-center gap-1">
                 <button onClick={() => setPage(1)} disabled={page === 1}
-                  className="px-2 py-1 rounded-lg text-xs text-slate-400 hover:text-slate-200 disabled:opacity-30 hover:bg-slate-700 transition-all">«</button>
+                  className="px-2.5 py-1.5 rounded-lg text-xs text-slate-400 hover:text-slate-200 disabled:opacity-30 hover:bg-slate-700 transition-all">«</button>
                 <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-                  className="px-2 py-1 rounded-lg text-xs text-slate-400 hover:text-slate-200 disabled:opacity-30 hover:bg-slate-700 transition-all">‹</button>
+                  className="px-2.5 py-1.5 rounded-lg text-xs text-slate-400 hover:text-slate-200 disabled:opacity-30 hover:bg-slate-700 transition-all">‹</button>
                 {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                   const p = Math.max(1, Math.min(totalPages - 4, page - 2)) + i;
                   return (
                     <button key={p} onClick={() => setPage(p)}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${p === page ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'}`}>
+                      className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${p === page ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'}`}>
                       {p}
                     </button>
                   );
                 })}
                 <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-                  className="px-2 py-1 rounded-lg text-xs text-slate-400 hover:text-slate-200 disabled:opacity-30 hover:bg-slate-700 transition-all">›</button>
+                  className="px-2.5 py-1.5 rounded-lg text-xs text-slate-400 hover:text-slate-200 disabled:opacity-30 hover:bg-slate-700 transition-all">›</button>
                 <button onClick={() => setPage(totalPages)} disabled={page === totalPages}
-                  className="px-2 py-1 rounded-lg text-xs text-slate-400 hover:text-slate-200 disabled:opacity-30 hover:bg-slate-700 transition-all">»</button>
+                  className="px-2.5 py-1.5 rounded-lg text-xs text-slate-400 hover:text-slate-200 disabled:opacity-30 hover:bg-slate-700 transition-all">»</button>
               </div>
             </div>
           )}

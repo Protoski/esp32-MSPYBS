@@ -44,7 +44,6 @@ export default function HospitalDashboard() {
 
   usePolling(poll, POLL_MS);
 
-  // Detectar si el ESP32 está activo según intervalo entre registros
   const rawLatest = rows[rows.length - 1];
   const rawPrev   = rows[rows.length - 2];
   const isOnline  = (() => {
@@ -58,7 +57,6 @@ export default function HospitalDashboard() {
     return ageMs >= 0 && ageMs < 30_000;
   })();
 
-  // Sin señal → no mostrar datos antiguos
   const latest = isOnline ? rawLatest : undefined;
   const last50 = isOnline ? rows.slice(-50) : [];
   const labels = last50.map(r => fmt(r.timestamp));
@@ -70,13 +68,13 @@ export default function HospitalDashboard() {
         <Link href="/" className="hover:text-slate-300 transition-colors">← Todos los hospitales</Link>
         {hospital && <><span>/</span><span className="text-slate-300 font-semibold">{hospital.nombre}</span></>}
       </div>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-black text-slate-100">{hospital?.nombre ?? 'Cargando...'}</h1>
-          <p className="text-sm text-slate-500">{hospital?.ciudad} · {hospital?.direccion}</p>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h1 className="text-lg sm:text-xl font-black text-slate-100 truncate">{hospital?.nombre ?? 'Cargando...'}</h1>
+          <p className="text-xs sm:text-sm text-slate-500 truncate">{hospital?.ciudad} · {hospital?.direccion}</p>
         </div>
         {hospital && (
-          <Link href={`/admin/hospital/${id}`} className="text-xs px-3 py-1.5 rounded-lg border border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-500 transition-all">⚙️ Configurar</Link>
+          <Link href={`/admin/hospital/${id}`} className="flex-shrink-0 text-xs px-3 py-1.5 rounded-lg border border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-500 transition-all">⚙️ Configurar</Link>
         )}
       </div>
       <StatusBar lastUpdate={lastUpdate} isConnected={isOnline} isPolling={isPolling} errorMessage={error} />
@@ -91,7 +89,7 @@ export default function HospitalDashboard() {
           <GaugeChart value={latest?.tower_b_pressure_bar ?? 0} min={0} max={7} label="Torre B PSA" unit="bar" status={latest ? rangeStatus(latest.tower_b_pressure_bar, 0.2, 6) : 'neutral'} />
           <GaugeChart value={latest?.o2_tank_pressure_bar ?? 0} min={0} max={8} label="Tanque O₂" unit="bar" status={latest ? rangeStatus(latest.o2_tank_pressure_bar, 2.5, 6) : 'neutral'} />
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3 mb-4">
           <KPICard label="Pureza O₂" value={n(latest?.o2_purity_pct)} unit="% O₂"
             status={latest ? o2PurityStatus(latest.o2_purity_pct, th?.o2_purity_warn, th?.o2_purity_critical) : 'neutral'}
             sublabel={latest && latest.o2_purity_pct < (th?.o2_purity_critical ?? 90) ? '🚨 ALARMA GRAVE' : latest && latest.o2_purity_pct < (th?.o2_purity_warn ?? 93) ? '⚠ Bajo umbral' : 'Normal (≥93%)'}
