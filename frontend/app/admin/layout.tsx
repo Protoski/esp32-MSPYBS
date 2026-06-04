@@ -45,8 +45,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   const navLinks = [
-    { href: '/admin',           label: 'Resumen',    icon: '📊' },
-    { href: '/admin/hospitals', label: 'Hospitales', icon: '🏥' },
+    { href: '/admin',            label: 'Resumen',    icon: '📊' },
+    { href: '/admin/hospitals',  label: 'Hospitales', icon: '🏥' },
+    { href: '/admin/historial',  label: 'Historial',  icon: '📅' },
   ];
 
   return (
