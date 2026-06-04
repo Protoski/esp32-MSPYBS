@@ -33,21 +33,34 @@ export default function HospitalDashboard() {
       if (dataRes.ok && dataRes.rows.length > 0) {
         setRows(dataRes.rows);
         setLastUpdate(fmt(dataRes.rows[dataRes.rows.length - 1].timestamp));
-        setIsConnected(true);
       }
       const found = hospRes.hospitals.find((h: Hospital) => h.id === id);
       if (found) setHospital(found);
       setError(null);
     } catch (err) {
-      setIsConnected(false);
       setError(err instanceof Error ? err.message : 'Error');
     } finally { setIsPolling(false); }
   }, [id]);
 
   usePolling(poll, POLL_MS);
 
-  const latest = rows[rows.length - 1];
-  const last50 = rows.slice(-50);
+  // Detectar si el ESP32 está activo según intervalo entre registros
+  const rawLatest = rows[rows.length - 1];
+  const rawPrev   = rows[rows.length - 2];
+  const isOnline  = (() => {
+    if (!rawLatest?.timestamp) return false;
+    const latestMs = new Date(rawLatest.timestamp).getTime();
+    const ageMs    = Date.now() - latestMs;
+    if (rawPrev?.timestamp) {
+      const intervalMs = Math.abs(latestMs - new Date(rawPrev.timestamp).getTime());
+      return intervalMs > 0 && ageMs >= 0 && ageMs < intervalMs * 3;
+    }
+    return ageMs >= 0 && ageMs < 30_000;
+  })();
+
+  // Sin señal → no mostrar datos antiguos
+  const latest = isOnline ? rawLatest : undefined;
+  const last50 = isOnline ? rows.slice(-50) : [];
   const labels = last50.map(r => fmt(r.timestamp));
   const th = hospital?.thresholds;
 
@@ -66,7 +79,7 @@ export default function HospitalDashboard() {
           <Link href={`/admin/hospital/${id}`} className="text-xs px-3 py-1.5 rounded-lg border border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-500 transition-all">⚙️ Configurar</Link>
         )}
       </div>
-      <StatusBar lastUpdate={lastUpdate} isConnected={isConnected} isPolling={isPolling} errorMessage={error} />
+      <StatusBar lastUpdate={lastUpdate} isConnected={isOnline} isPolling={isPolling} errorMessage={error} />
       {latest && hospital && <AlertBanner latest={latest} hospital={hospital} />}
 
       <Section icon="⚗️" title="Planta PSA — Oxígeno Medicinal">
