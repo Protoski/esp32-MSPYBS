@@ -177,10 +177,8 @@ void sendData() {
     Serial.println("[HTTP] Redirect → " + location);
 
     if (location.length() > 0) {
-      WiFiClientSecure client2;
-      client2.setInsecure();
       HTTPClient http2;
-      http2.begin(client2, location);
+      http2.begin(location);   // el core ESP32 maneja HTTPS por sí solo
       http2.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
       int code2 = http2.GET();
       if (code2 > 0) {
