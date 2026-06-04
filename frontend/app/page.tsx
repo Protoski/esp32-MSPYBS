@@ -19,14 +19,15 @@ export default function OverviewPage() {
       const results = await Promise.all(
         hospitals.map(async (h: Hospital) => {
           try {
-            const { rows } = await fetchPlantData(h.id);
+            const { rows, now } = await fetchPlantData(h.id);
             const latest = rows[rows.length - 1] ?? null;
-            const prev   = rows[rows.length - 2] ?? null;
 
             let isOnline = false;
             if (latest?.timestamp) {
-              const ageMs = Date.now() - new Date(latest.timestamp).getTime();
-              isOnline = ageMs >= 0 && ageMs < 60_000;
+              // Compara contra la hora del servidor (mismo reloj que el timestamp)
+              const refMs = now ? new Date(now).getTime() : Date.now();
+              const ageMs = refMs - new Date(latest.timestamp).getTime();
+              isOnline = ageMs < 60_000 && ageMs > -60_000;
             }
             const activeAlerts = latest ? buildAlerts(latest, h).length : 0;
             return { hospital: h, latest, isOnline, activeAlerts } as HospitalSummary;

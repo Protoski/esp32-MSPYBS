@@ -22,7 +22,7 @@ export default function HospitalDashboard() {
   const [rows, setRows] = useState<PlantRow[]>([]);
   const [hospital, setHospital] = useState<Hospital | null>(null);
   const [lastUpdate, setLastUpdate] = useState<string | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
+  const [serverNow, setServerNow] = useState<string | null>(null);
   const [isPolling, setIsPolling] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,6 +34,7 @@ export default function HospitalDashboard() {
         setRows(dataRes.rows);
         setLastUpdate(fmt(dataRes.rows[dataRes.rows.length - 1].timestamp));
       }
+      setServerNow(dataRes.now ?? null);
       const found = hospRes.hospitals.find((h: Hospital) => h.id === id);
       if (found) setHospital(found);
       setError(null);
@@ -45,13 +46,15 @@ export default function HospitalDashboard() {
   usePolling(poll, POLL_MS);
 
   const rawLatest = rows[rows.length - 1];
-  const rawPrev   = rows[rows.length - 2];
   const isOnline  = (() => {
     if (!rawLatest?.timestamp) return false;
     const latestMs = new Date(rawLatest.timestamp).getTime();
-    const ageMs    = Date.now() - latestMs;
-    // Considerado "en línea" si el último dato llegó hace menos de 60 segundos
-    return ageMs >= 0 && ageMs < 60_000;
+    // Compara contra la hora del servidor (mismo reloj que el timestamp);
+    // si no está disponible, usa el reloj del navegador como respaldo.
+    const refMs = serverNow ? new Date(serverNow).getTime() : Date.now();
+    const ageMs = refMs - latestMs;
+    // En línea si el último dato llegó hace menos de 60 segundos
+    return ageMs < 60_000 && ageMs > -60_000;
   })();
 
   const latest = isOnline ? rawLatest : undefined;

@@ -49,6 +49,7 @@ export interface ApiDataResponse {
   ok:    boolean;
   count: number;
   rows:  PlantRow[];
+  now?:  string; // hora del servidor (ISO) para detectar conexión sin depender del reloj del navegador
   error?: string;
 }
 

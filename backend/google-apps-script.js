@@ -53,13 +53,15 @@ function postData_(body) {
 
 function getData_(hospitalId) {
   var sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName(SH_DATA);
-  if (!sheet) return ok_({ count: 0, rows: [] });
+  if (!sheet) return ok_({ count: 0, rows: [], now: new Date().toISOString() });
   var last = sheet.getLastRow();
-  if (last < 2) return ok_({ count: 0, rows: [] });
+  if (last < 2) return ok_({ count: 0, rows: [], now: new Date().toISOString() });
   var start = Math.max(2, last - 500 + 1);
   var vals  = sheet.getRange(start, 1, last - start + 1, 14).getValues();
   var rows  = vals.filter(function(r) { return !hospitalId || r[1] === hospitalId; }).slice(-MAX_ROWS).map(rowToObj_);
-  return ok_({ count: rows.length, rows: rows });
+  // 'now' = hora del servidor; el frontend compara contra ella (mismo reloj)
+  // para detectar conexion sin depender del reloj del navegador.
+  return ok_({ count: rows.length, rows: rows, now: new Date().toISOString() });
 }
 
 function getLatestAll_() {
@@ -71,7 +73,7 @@ function getLatestAll_() {
   var vals  = sheet.getRange(start, 1, last - start + 1, 14).getValues();
   var map   = {};
   vals.forEach(function(r) { if (r[1]) map[r[1]] = rowToObj_(r); });
-  return ok_({ count: Object.keys(map).length, rows: Object.values(map) });
+  return ok_({ count: Object.keys(map).length, rows: Object.values(map), now: new Date().toISOString() });
 }
 
 function rowToObj_(r) {
