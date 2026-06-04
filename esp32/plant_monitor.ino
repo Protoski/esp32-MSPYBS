@@ -1,7 +1,8 @@
 /**
  * ============================================================
  * MONITOR DE PLANTA DE GASES MEDICINALES - ESP32
- * Firmware v1.0.0  |  Arduino IDE / PlatformIO
+ * Firmware v1.1.0  |  Arduino IDE / PlatformIO
+ *   (redirect 302 de Google seguido manualmente con GET → 200 OK)
  * ============================================================
  * Librerías requeridas (instalar desde el Gestor de Librerías):
  *   - ArduinoJson  ≥ 6.x  (Benoit Blanchon)
