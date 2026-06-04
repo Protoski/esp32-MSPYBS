@@ -154,15 +154,20 @@ void sendData() {
   // Solución: seguir el redirect manualmente:
   //   1) POST a /exec con redirects DESACTIVADOS  → leemos cabecera Location
   //   2) GET a la URL de Location                 → respuesta real del script
+  // ⚡ Un ÚNICO cliente seguro reutilizado para POST y GET. Crear dos
+  // contextos TLS simultáneos agota la RAM del ESP32 → "connection refused".
   WiFiClientSecure client;
-  client.setInsecure();              // sin validación de certificado (suficiente aquí)
+  client.setInsecure();                 // sin validación de certificado
+  client.setHandshakeTimeout(15);       // segundos para el handshake TLS
 
   HTTPClient http;
+  http.setReuse(false);
+  http.setConnectTimeout(15000);        // ms para conectar
+  http.setTimeout(15000);               // ms de espera de respuesta
   http.begin(client, API_URL);
   http.addHeader("Content-Type", "text/plain;charset=utf-8");
   http.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
 
-  // Pedimos que se nos exponga la cabecera Location del redirect
   const char* headerKeys[] = { "Location" };
   http.collectHeaders(headerKeys, 1);
 
@@ -171,14 +176,17 @@ void sendData() {
 
   if (httpCode == HTTP_CODE_FOUND || httpCode == HTTP_CODE_MOVED_PERMANENTLY ||
       httpCode == HTTP_CODE_SEE_OTHER || httpCode == HTTP_CODE_TEMPORARY_REDIRECT) {
-    // Redirect esperado → seguirlo con un GET manual
     String location = http.header("Location");
-    http.end();
+    http.end();                         // libera la conexión del POST
     Serial.println("[HTTP] Redirect → " + location);
 
     if (location.length() > 0) {
+      // Reutilizamos el MISMO cliente seguro para el GET del redirect
       HTTPClient http2;
-      http2.begin(location);   // el core ESP32 maneja HTTPS por sí solo
+      http2.setReuse(false);
+      http2.setConnectTimeout(15000);
+      http2.setTimeout(15000);
+      http2.begin(client, location);
       http2.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
       int code2 = http2.GET();
       if (code2 > 0) {
@@ -191,13 +199,14 @@ void sendData() {
       Serial.println("[HTTP] ERROR: redirect sin cabecera Location");
     }
   } else if (httpCode > 0) {
-    // Sin redirect (poco común) → ya tenemos la respuesta
     Serial.printf("[HTTP] Respuesta directa: %s\n", http.getString().c_str());
     http.end();
   } else {
     Serial.printf("[HTTP] ERROR POST: %s\n", http.errorToString(httpCode).c_str());
     http.end();
   }
+
+  Serial.printf("[MEM] Heap libre: %d bytes\n", ESP.getFreeHeap());
 }
 
 // ============================================================
