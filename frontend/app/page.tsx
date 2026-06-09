@@ -2,9 +2,9 @@
 
 import React, { useState, useCallback } from 'react';
 import HospitalCard from '@/components/HospitalCard';
-import { fetchHospitals, fetchPlantData } from '@/lib/api';
+import { fetchHospitals, fetchAllLatest } from '@/lib/api';
 import { usePolling } from '@/hooks/usePolling';
-import type { Hospital, HospitalSummary } from '@/types/plant';
+import type { Hospital, HospitalSummary, PlantRow } from '@/types/plant';
 import { buildAlerts } from '@/components/AlertBanner';
 
 export default function OverviewPage() {
@@ -15,27 +15,24 @@ export default function OverviewPage() {
 
   const load = useCallback(async () => {
     try {
-      const { hospitals } = await fetchHospitals();
-      const results = await Promise.all(
-        hospitals.map(async (h: Hospital) => {
-          try {
-            const { rows, now } = await fetchPlantData(h.id);
-            const latest = rows[rows.length - 1] ?? null;
+      const [{ hospitals }, latestRes] = await Promise.all([
+        fetchHospitals(),
+        fetchAllLatest(),
+      ]);
+      const latestMap: Record<string, PlantRow | null> = {};
+      (latestRes.rows ?? []).forEach((r: PlantRow) => { latestMap[r.hospital_id] = r; });
+      const refMs = latestRes.now ? new Date(latestRes.now).getTime() : Date.now();
 
-            let isOnline = false;
-            if (latest?.timestamp) {
-              // Compara contra la hora del servidor (mismo reloj que el timestamp)
-              const refMs = now ? new Date(now).getTime() : Date.now();
-              const ageMs = refMs - new Date(latest.timestamp).getTime();
-              isOnline = ageMs < 60_000 && ageMs > -60_000;
-            }
-            const activeAlerts = latest ? buildAlerts(latest, h).length : 0;
-            return { hospital: h, latest, isOnline, activeAlerts } as HospitalSummary;
-          } catch {
-            return { hospital: h, latest: null, isOnline: false, activeAlerts: 0 };
-          }
-        })
-      );
+      const results = hospitals.map((h: Hospital) => {
+        const latest = latestMap[h.id] ?? null;
+        let isOnline = false;
+        if (latest?.timestamp) {
+          const ageMs = refMs - new Date(latest.timestamp).getTime();
+          isOnline = ageMs < 60_000 && ageMs > -60_000;
+        }
+        const activeAlerts = latest ? buildAlerts(latest, h).length : 0;
+        return { hospital: h, latest, isOnline, activeAlerts } as HospitalSummary;
+      });
       setSummaries(results);
       setLastUpdate(new Date().toLocaleTimeString('es-CO', { hour12: false }));
       setError(null);
