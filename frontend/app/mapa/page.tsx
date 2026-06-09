@@ -5,7 +5,7 @@ import { usePolling } from '@/hooks/usePolling';
 import { fetchHospitals, fetchAllLatest } from '@/lib/api';
 import type { Hospital, HospitalSummary, PlantRow } from '@/types/plant';
 import { buildAlerts } from '@/components/AlertBanner';
-import { getCityCoords, getZone, ZONE_COLORS, ZONES } from '@/lib/paraguay';
+import { getCityCoords, getZone, ZONE_COLORS } from '@/lib/paraguay';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 
@@ -39,7 +39,6 @@ export default function MapaPage() {
 
   usePolling(load, 15_000);
 
-  // Group by zone
   const byZone = summaries.reduce<Record<string, HospitalSummary[]>>((acc, s) => {
     const z = getZone(s.hospital.ciudad);
     acc[z] = [...(acc[z] ?? []), s];
@@ -73,7 +72,6 @@ export default function MapaPage() {
         </div>
       </div>
 
-      {/* Zone summary strip */}
       {!isLoading && Object.keys(byZone).length > 0 && (
         <div className="flex flex-wrap gap-2">
           {Object.entries(byZone).map(([zone, list]) => {
@@ -100,7 +98,6 @@ export default function MapaPage() {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Map */}
         <div className="lg:col-span-2">
           {isLoading ? (
             <div className="rounded-xl bg-slate-800 border border-slate-700 h-[420px] animate-pulse" />
@@ -112,7 +109,6 @@ export default function MapaPage() {
           )}
         </div>
 
-        {/* Side panel */}
         <div className="space-y-3 overflow-y-auto max-h-[480px] pr-1">
           {selected && selectedSummary ? (
             <SelectedPanel summary={selectedSummary} onClose={() => setSelected(null)} />

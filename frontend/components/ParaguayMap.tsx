@@ -6,12 +6,6 @@ import type { Hospital } from '@/types/plant';
 import type { HospitalSummary } from '@/types/plant';
 import { getCityCoords, ZONE_COLORS } from '@/lib/paraguay';
 
-// Paraguay departments GeoJSON from public domain Natural Earth data
-const GEO_URL = 'https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson';
-
-// Fallback: draw Paraguay as a simple outlined box if GeoJSON fails
-// Paraguay bounds: approx lat -27.6 to -19.3, lon -62.6 to -54.3
-
 interface Props {
   summaries: HospitalSummary[];
   onSelect?: (hospital: Hospital) => void;
@@ -28,8 +22,6 @@ interface MarkerData {
 
 export default function ParaguayMap({ summaries, onSelect }: Props) {
   const [tooltip, setTooltip] = useState<{ x: number; y: number; data: MarkerData } | null>(null);
-  const [geoLoaded, setGeoLoaded] = useState(false);
-  const [geoError, setGeoError] = useState(false);
 
   const markers: MarkerData[] = summaries
     .map(s => {
@@ -68,7 +60,6 @@ export default function ParaguayMap({ summaries, onSelect }: Props) {
         style={{ width: '100%', height: 420 }}
       >
         <ZoomableGroup zoom={1} minZoom={0.8} maxZoom={6}>
-          {/* Paraguay background drawn as a simple SVG rect approximation via Geography */}
           <ParaguayGeo />
           {markers.map(m => (
             <Marker
@@ -114,7 +105,6 @@ export default function ParaguayMap({ summaries, onSelect }: Props) {
         </ZoomableGroup>
       </ComposableMap>
 
-      {/* Tooltip */}
       {tooltip && (
         <div
           className="absolute z-20 pointer-events-none bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 shadow-xl text-xs"
@@ -143,7 +133,6 @@ export default function ParaguayMap({ summaries, onSelect }: Props) {
   );
 }
 
-// Simple Paraguay geography using a hardcoded GeoJSON path approach
 function ParaguayGeo() {
   const [geo, setGeo] = useState<object | null>(null);
 
@@ -155,13 +144,10 @@ function ParaguayGeo() {
           .find(f => f.properties.ADMIN === 'Paraguay');
         if (pry) setGeo({ type: 'FeatureCollection', features: [pry] });
       })
-      .catch(() => {
-        // Fallback: use world topo
-      });
+      .catch(() => {});
   }, []);
 
   if (!geo) {
-    // Fallback: draw Paraguay from world atlas while GeoJSON loads
     return (
       <Geographies geography="https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json">
         {({ geographies }) =>
