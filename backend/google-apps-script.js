@@ -8,7 +8,8 @@
 const SHEET_ID = 'REEMPLAZAR_CON_TU_SHEET_ID';
 const SH_DATA  = 'Registros';
 const SH_HOSP  = 'Hospitales';
-const MAX_ROWS = 100;
+const MAX_ROWS = 500;    // registros maximos a devolver en una consulta de historial
+const SCAN_ROWS = 20000; // filas a escanear hacia atras para encontrar los de un hospital
 
 function ok_(data)  { return out_(Object.assign({ ok: true  }, data)); }
 function err_(msg)  { return out_({ ok: false, error: msg }); }
@@ -59,7 +60,9 @@ function getData_(hospitalId) {
   if (!sheet) return ok_({ count: 0, rows: [], now: new Date().toISOString() });
   var last = sheet.getLastRow();
   if (last < 2) return ok_({ count: 0, rows: [], now: new Date().toISOString() });
-  var start = Math.max(2, last - 500 + 1);
+  // Escanea muchas filas hacia atras para encontrar registros aunque el
+  // equipo lleve tiempo sin enviar (sus filas quedan empujadas hacia arriba).
+  var start = Math.max(2, last - SCAN_ROWS + 1);
   var vals  = sheet.getRange(start, 1, last - start + 1, 14).getValues();
   var rows  = vals.filter(function(r) { return !hospitalId || r[1] === hospitalId; }).slice(-MAX_ROWS).map(rowToObj_);
   // 'now' = hora del servidor; el frontend compara contra ella (mismo reloj)
@@ -72,7 +75,7 @@ function getLatestAll_() {
   if (!sheet) return ok_({ count: 0, rows: [] });
   var last = sheet.getLastRow();
   if (last < 2) return ok_({ count: 0, rows: [] });
-  var start = Math.max(2, last - 1000 + 1);
+  var start = Math.max(2, last - SCAN_ROWS + 1);
   var vals  = sheet.getRange(start, 1, last - start + 1, 14).getValues();
   var map   = {};
   vals.forEach(function(r) { if (r[1]) map[r[1]] = rowToObj_(r); });
