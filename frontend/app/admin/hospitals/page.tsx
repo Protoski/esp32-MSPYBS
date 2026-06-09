@@ -62,7 +62,7 @@ export default function AddHospitalPage() {
               { label: 'Vacío Mínimo (mmHg)',     key: 'vacuum_min_mmhg',   min: -700, max: -100, step: 10  },
             ].map(({ label, key, min, max, step }) => (
               <div key={key} className="space-y-1.5"><label className="text-xs font-semibold text-slate-400">{label}</label>
-                <input type="number" min={min} max={max} step={step} value={(form.thresholds as Record<string,number>)[key]}
+                <input type="number" min={min} max={max} step={step} value={(form.thresholds as unknown as Record<string,number>)[key]}
                   onChange={e => setTh(key, Number(e.target.value))} className={inp} /></div>
             ))}
           </div>

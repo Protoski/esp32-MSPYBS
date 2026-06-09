@@ -128,7 +128,7 @@ export default function HospitalConfigPage() {
               <label className="text-xs font-semibold text-slate-400">{label}</label>
               <input
                 type="number" min={min} max={max} step={step}
-                value={(form.thresholds as Record<string, number>)[key]}
+                value={(form.thresholds as unknown as Record<string, number>)[key]}
                 onChange={e => setTh(key, Number(e.target.value))}
                 className={inp}
               />
