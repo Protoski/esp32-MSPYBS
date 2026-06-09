@@ -74,3 +74,14 @@ export function getZone(ciudad: string): string {
   const coords = getCityCoords(ciudad);
   return coords?.zona ?? 'Desconocido';
 }
+
+// Coordenadas efectivas de un hospital: las fijadas por el admin tienen
+// prioridad; si no hay, se usa la posición conocida de la ciudad.
+export function getHospitalCoords(h: { ciudad: string; lat?: number | null; lon?: number | null }): { lat: number; lon: number; zona: string } | null {
+  const cityZone = getZone(h.ciudad);
+  if (typeof h.lat === 'number' && typeof h.lon === 'number' && !isNaN(h.lat) && !isNaN(h.lon)) {
+    return { lat: h.lat, lon: h.lon, zona: cityZone };
+  }
+  const city = getCityCoords(h.ciudad);
+  return city ? { lat: city.lat, lon: city.lon, zona: city.zona } : null;
+}

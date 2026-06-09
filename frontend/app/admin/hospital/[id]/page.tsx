@@ -3,8 +3,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { fetchHospitals, updateHospital, toggleHospital } from '@/lib/api';
 import type { Hospital } from '@/types/plant';
+
+const MapPicker = dynamic(() => import('@/components/MapPicker'), { ssr: false });
 
 const inp = 'w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-slate-100 outline-none focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500 transition-all';
 
@@ -108,6 +111,22 @@ export default function HospitalConfigPage() {
               />
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* Ubicación en el mapa */}
+      <div className="rounded-xl border border-slate-700 bg-slate-800/60 overflow-hidden">
+        <div className="px-4 py-3 border-b border-slate-700 bg-slate-800">
+          <p className="text-sm font-bold text-slate-300">📍 Ubicación en el Mapa</p>
+          <p className="text-[10px] text-slate-500 mt-0.5">Haz clic en el mapa de Paraguay para fijar la posición exacta de la planta. Si no fijas una, se usará la posición de la ciudad.</p>
+        </div>
+        <div className="p-4">
+          <MapPicker
+            lat={form.lat}
+            lon={form.lon}
+            ciudad={form.ciudad}
+            onChange={(lat, lon) => setForm(f => f ? ({ ...f, lat, lon }) : f)}
+          />
         </div>
       </div>
 

@@ -5,7 +5,7 @@ import { usePolling } from '@/hooks/usePolling';
 import { fetchHospitals, fetchAllLatest } from '@/lib/api';
 import type { Hospital, HospitalSummary, PlantRow } from '@/types/plant';
 import { buildAlerts } from '@/components/AlertBanner';
-import { getCityCoords, getZone, ZONE_COLORS } from '@/lib/paraguay';
+import { getHospitalCoords, getZone, ZONE_COLORS } from '@/lib/paraguay';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 
@@ -119,7 +119,7 @@ export default function MapaPage() {
                 <p className="text-slate-600 text-sm">Sin plantas para mostrar.</p>
               )}
               {displayed.map(s => {
-                const coords = getCityCoords(s.hospital.ciudad);
+                const coords = getHospitalCoords(s.hospital);
                 const zona = coords?.zona ?? 'Desconocido';
                 const color = ZONE_COLORS[zona] ?? ZONE_COLORS['Desconocido'];
                 return (
@@ -148,7 +148,7 @@ export default function MapaPage() {
                       <p className="text-[10px] text-red-400 mt-1 font-bold">{s.activeAlerts} alerta(s) activa(s)</p>
                     )}
                     {!coords && (
-                      <p className="text-[10px] text-amber-500 mt-1">⚠ Ciudad no mapeada — no visible en mapa</p>
+                      <p className="text-[10px] text-amber-500 mt-1">⚠ Sin ubicación — fíjala en Admin → Configurar</p>
                     )}
                   </button>
                 );
@@ -163,7 +163,7 @@ export default function MapaPage() {
 
 function SelectedPanel({ summary, onClose }: { summary: HospitalSummary; onClose: () => void }) {
   const { hospital, latest, isOnline, activeAlerts } = summary;
-  const coords = getCityCoords(hospital.ciudad);
+  const coords = getHospitalCoords(hospital);
   const zona = coords?.zona ?? 'Desconocido';
   const color = ZONE_COLORS[zona] ?? ZONE_COLORS['Desconocido'];
 

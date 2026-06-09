@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { ComposableMap, Geographies, Geography, Marker, ZoomableGroup } from 'react-simple-maps';
 import type { Hospital } from '@/types/plant';
 import type { HospitalSummary } from '@/types/plant';
-import { getCityCoords, ZONE_COLORS } from '@/lib/paraguay';
+import { getHospitalCoords, ZONE_COLORS } from '@/lib/paraguay';
 
 interface Props {
   summaries: HospitalSummary[];
@@ -25,7 +25,7 @@ export default function ParaguayMap({ summaries, onSelect }: Props) {
 
   const markers: MarkerData[] = summaries
     .map(s => {
-      const coords = getCityCoords(s.hospital.ciudad);
+      const coords = getHospitalCoords(s.hospital);
       if (!coords) return null;
       const zona = coords.zona;
       return {

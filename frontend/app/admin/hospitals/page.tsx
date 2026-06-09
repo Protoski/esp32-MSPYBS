@@ -2,8 +2,11 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import { createHospital } from '@/lib/api';
 import type { Hospital } from '@/types/plant';
+
+const MapPicker = dynamic(() => import('@/components/MapPicker'), { ssr: false });
 
 const DEF_TH = { o2_purity_warn: 93, o2_purity_critical: 90, air_pressure_min: 4.5, air_pressure_max: 5.5, vacuum_min_mmhg: -400 };
 const DEF_EQ = { compressor_enabled: true, vacuum_enabled: true, psa_enabled: true };
@@ -17,6 +20,7 @@ export default function AddHospitalPage() {
   const [form, setForm] = useState<Omit<Hospital, 'id' | 'created_at'>>({
     nombre: '', ciudad: '', direccion: '', activo: true,
     thresholds: { ...DEF_TH }, equipment: { ...DEF_EQ },
+    lat: null, lon: null,
   });
 
   const set   = (k: string, v: unknown) => setForm(f => ({ ...f, [k]: v }));
@@ -47,10 +51,18 @@ export default function AddHospitalPage() {
         <Card title="📋 Información del Hospital">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5"><label className="text-xs font-semibold text-slate-400">Nombre *</label><input value={form.nombre} onChange={e => set('nombre', e.target.value)} placeholder="Ej: Hospital Universitario" className={inp} required /></div>
-            <div className="space-y-1.5"><label className="text-xs font-semibold text-slate-400">Ciudad *</label><input value={form.ciudad} onChange={e => set('ciudad', e.target.value)} placeholder="Ej: Bogotá" className={inp} required /></div>
+            <div className="space-y-1.5"><label className="text-xs font-semibold text-slate-400">Ciudad *</label><input value={form.ciudad} onChange={e => set('ciudad', e.target.value)} placeholder="Ej: Asunción" className={inp} required /></div>
             <div className="space-y-1.5 sm:col-span-2"><label className="text-xs font-semibold text-slate-400">Dirección</label><input value={form.direccion} onChange={e => set('direccion', e.target.value)} placeholder="Ej: Calle 50 # 30-20" className={inp} /></div>
             <div className="space-y-1.5"><label className="text-xs font-semibold text-slate-400">Estado inicial</label><select value={form.activo ? 'true' : 'false'} onChange={e => set('activo', e.target.value === 'true')} className={inp}><option value="true">Activo</option><option value="false">Inactivo</option></select></div>
           </div>
+        </Card>
+        <Card title="📍 Ubicación en el Mapa (opcional)">
+          <MapPicker
+            lat={form.lat}
+            lon={form.lon}
+            ciudad={form.ciudad}
+            onChange={(lat, lon) => setForm(f => ({ ...f, lat, lon }))}
+          />
         </Card>
         <Card title="⚠️ Umbrales de Alarma">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
