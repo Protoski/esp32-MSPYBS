@@ -1,6 +1,6 @@
 /**
  * SISTEMA DE MONITOREO — PLANTA DE GASES MEDICINALES
- * Google Apps Script v2.0.0 — Multi-hospital
+ * Google Apps Script v2.1.0 — Multi-hospital
  *
  * HOJAS REQUERIDAS: "Registros" y "Hospitales" (ejecutar initAll() una vez)
  */
@@ -40,8 +40,11 @@ function doPost(e) {
 function postData_(body) {
   var sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName(SH_DATA);
   if (!sheet) return err_('Hoja ' + SH_DATA + ' no encontrada.');
+  // Guardamos el timestamp como texto ISO (UTC). Si se guarda como objeto
+  // Date, Google Sheets lo reinterpreta segun la zona horaria de la hoja al
+  // leerlo, desfasandolo varias horas y rompiendo la deteccion de conexion.
   sheet.appendRow([
-    new Date(), body.hospital_id||'', body.o2_flow_m3h||0,
+    new Date().toISOString(), body.hospital_id||'', body.o2_flow_m3h||0,
     body.tower_a_pressure_bar||0, body.tower_b_pressure_bar||0,
     body.o2_tank_pressure_bar||0, body.o2_purity_pct||0,
     body.psa_dewpoint_c||0, body.compressor_status||'',
@@ -59,16 +62,14 @@ function getData_(hospitalId) {
   var start = Math.max(2, last - 500 + 1);
   var vals  = sheet.getRange(start, 1, last - start + 1, 14).getValues();
   var rows  = vals.filter(function(r) { return !hospitalId || r[1] === hospitalId; }).slice(-MAX_ROWS).map(rowToObj_);
-  // 'now' = hora del servidor; el frontend compara contra ella (mismo reloj)
-  // para detectar conexion sin depender del reloj del navegador.
   return ok_({ count: rows.length, rows: rows, now: new Date().toISOString() });
 }
 
 function getLatestAll_() {
   var sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName(SH_DATA);
-  if (!sheet) return ok_({ count: 0, rows: [] });
+  if (!sheet) return ok_({ count: 0, rows: [], now: new Date().toISOString() });
   var last = sheet.getLastRow();
-  if (last < 2) return ok_({ count: 0, rows: [] });
+  if (last < 2) return ok_({ count: 0, rows: [], now: new Date().toISOString() });
   var start = Math.max(2, last - 1000 + 1);
   var vals  = sheet.getRange(start, 1, last - start + 1, 14).getValues();
   var map   = {};
@@ -77,8 +78,12 @@ function getLatestAll_() {
 }
 
 function rowToObj_(r) {
+  // Si ya es texto ISO se devuelve tal cual (sin reconvertir zona horaria);
+  // si es un objeto Date (filas antiguas) se normaliza a ISO UTC.
+  var ts = null;
+  if (r[0]) ts = (typeof r[0] === 'string') ? r[0] : new Date(r[0]).toISOString();
   return {
-    timestamp: r[0] ? new Date(r[0]).toISOString() : null,
+    timestamp: ts,
     hospital_id: r[1], o2_flow_m3h: r[2], tower_a_pressure_bar: r[3],
     tower_b_pressure_bar: r[4], o2_tank_pressure_bar: r[5], o2_purity_pct: r[6],
     psa_dewpoint_c: r[7], compressor_status: r[8], compressor_hours: r[9],
@@ -178,5 +183,5 @@ function initAll() {
 
 function styleHeaders_(sheet, headers) {
   sheet.getRange(1,1,1,headers.length).setValues([headers]).setFontWeight('bold').setBackground('#0f172a').setFontColor('#38bdf8');
-  sheet.getRange(2,1,1000,1).setNumberFormat('yyyy-MM-dd HH:mm:ss');
+  sheet.getRange(2,1,1000,1).setNumberFormat('@STRING@');
 }
