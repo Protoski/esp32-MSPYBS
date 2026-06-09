@@ -1,6 +1,6 @@
 /**
  * SISTEMA DE MONITOREO — PLANTA DE GASES MEDICINALES
- * Google Apps Script v2.0.0 — Multi-hospital
+ * Google Apps Script v2.1.0 — Multi-hospital + ubicación en mapa
  *
  * HOJAS REQUERIDAS: "Registros" y "Hospitales" (ejecutar initAll() una vez)
  */
