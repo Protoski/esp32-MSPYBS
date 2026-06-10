@@ -5,6 +5,8 @@ import { ComposableMap, Geographies, Geography, Marker, ZoomableGroup } from 're
 import type { Hospital } from '@/types/plant';
 import type { HospitalSummary } from '@/types/plant';
 import { getHospitalCoords, ZONE_COLORS } from '@/lib/paraguay';
+import { hasGoogleMaps } from '@/lib/googleMaps';
+import GoogleParaguayMap from './GoogleParaguayMap';
 
 interface Props {
   summaries: HospitalSummary[];
@@ -20,7 +22,13 @@ interface MarkerData {
   activeAlerts: number;
 }
 
-export default function ParaguayMap({ summaries, onSelect }: Props) {
+export default function ParaguayMap(props: Props) {
+  // Con API key configurada se usa Google Maps; si no, el mapa SVG de respaldo
+  if (hasGoogleMaps) return <GoogleParaguayMap {...props} />;
+  return <SvgParaguayMap {...props} />;
+}
+
+function SvgParaguayMap({ summaries, onSelect }: Props) {
   const [tooltip, setTooltip] = useState<{ x: number; y: number; data: MarkerData } | null>(null);
 
   const markers: MarkerData[] = summaries

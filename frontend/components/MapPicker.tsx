@@ -4,6 +4,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { ComposableMap, Geographies, Geography, Marker } from 'react-simple-maps';
 import { geoMercator } from 'd3-geo';
 import { getCityCoords } from '@/lib/paraguay';
+import { hasGoogleMaps } from '@/lib/googleMaps';
+import GoogleMapPicker from './GoogleMapPicker';
 
 // Debe coincidir con el viewBox por defecto de ComposableMap (800x600)
 // y con la configuración de proyección usada abajo.
@@ -19,7 +21,13 @@ interface Props {
   onChange: (lat: number | null, lon: number | null) => void;
 }
 
-export default function MapPicker({ lat, lon, ciudad, onChange }: Props) {
+export default function MapPicker(props: Props) {
+  // Con API key configurada se usa Google Maps; si no, el mapa SVG de respaldo
+  if (hasGoogleMaps) return <GoogleMapPicker {...props} />;
+  return <SvgMapPicker {...props} />;
+}
+
+function SvgMapPicker({ lat, lon, ciudad, onChange }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const hasCustom = typeof lat === 'number' && typeof lon === 'number';
   const cityCoords = ciudad ? getCityCoords(ciudad) : null;
