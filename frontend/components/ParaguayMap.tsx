@@ -7,6 +7,7 @@ import type { HospitalSummary } from '@/types/plant';
 import { getHospitalCoords, ZONE_COLORS } from '@/lib/paraguay';
 import { hasGoogleMaps } from '@/lib/googleMaps';
 import GoogleParaguayMap from './GoogleParaguayMap';
+import LeafletParaguayMap from './LeafletParaguayMap';
 
 interface Props {
   summaries: HospitalSummary[];
@@ -23,9 +24,9 @@ interface MarkerData {
 }
 
 export default function ParaguayMap(props: Props) {
-  // Con API key configurada se usa Google Maps; si no, el mapa SVG de respaldo
+  // Google Maps solo si hay API key; por defecto OpenStreetMap (gratis, sin key)
   if (hasGoogleMaps) return <GoogleParaguayMap {...props} />;
-  return <SvgParaguayMap {...props} />;
+  return <LeafletParaguayMap {...props} />;
 }
 
 function SvgParaguayMap({ summaries, onSelect }: Props) {

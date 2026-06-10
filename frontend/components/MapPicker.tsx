@@ -6,6 +6,7 @@ import { geoMercator } from 'd3-geo';
 import { getCityCoords } from '@/lib/paraguay';
 import { hasGoogleMaps } from '@/lib/googleMaps';
 import GoogleMapPicker from './GoogleMapPicker';
+import LeafletMapPicker from './LeafletMapPicker';
 
 // Debe coincidir con el viewBox por defecto de ComposableMap (800x600)
 // y con la configuración de proyección usada abajo.
@@ -22,9 +23,9 @@ interface Props {
 }
 
 export default function MapPicker(props: Props) {
-  // Con API key configurada se usa Google Maps; si no, el mapa SVG de respaldo
+  // Google Maps solo si hay API key; por defecto OpenStreetMap (gratis, sin key)
   if (hasGoogleMaps) return <GoogleMapPicker {...props} />;
-  return <SvgMapPicker {...props} />;
+  return <LeafletMapPicker {...props} />;
 }
 
 function SvgMapPicker({ lat, lon, ciudad, onChange }: Props) {
