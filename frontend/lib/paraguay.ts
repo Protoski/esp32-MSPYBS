@@ -85,3 +85,25 @@ export function getHospitalCoords(h: { ciudad: string; lat?: number | null; lon?
   const city = getCityCoords(h.ciudad);
   return city ? { lat: city.lat, lon: city.lon, zona: city.zona } : null;
 }
+
+// Separa marcadores que caen exactamente en el mismo punto (varios
+// hospitales en la misma ciudad) distribuyéndolos en círculo alrededor
+// de la posición original para que no queden encimados.
+export function spreadOverlaps<T extends { lat: number; lon: number }>(items: T[]): T[] {
+  const groups: Record<string, number[]> = {};
+  items.forEach((m, i) => {
+    const key = `${m.lat.toFixed(3)},${m.lon.toFixed(3)}`;
+    (groups[key] ??= []).push(i);
+  });
+  const out = items.map(m => ({ ...m }));
+  Object.values(groups).forEach(idxs => {
+    if (idxs.length < 2) return;
+    const radius = 0.05; // ~5 km
+    idxs.forEach((idx, k) => {
+      const angle = (2 * Math.PI * k) / idxs.length - Math.PI / 2;
+      out[idx].lat += radius * Math.sin(angle);
+      out[idx].lon += radius * Math.cos(angle);
+    });
+  });
+  return out;
+}

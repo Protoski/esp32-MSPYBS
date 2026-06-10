@@ -4,7 +4,7 @@
 
 import React, { useEffect, useRef } from 'react';
 import type { Hospital, HospitalSummary } from '@/types/plant';
-import { getHospitalCoords, ZONE_COLORS } from '@/lib/paraguay';
+import { getHospitalCoords, spreadOverlaps, ZONE_COLORS } from '@/lib/paraguay';
 import { loadGoogleMaps, DARK_MAP_STYLE, PY_CENTER, PY_ZOOM, markerIcon } from '@/lib/googleMaps';
 
 interface Props {
@@ -49,13 +49,17 @@ export default function GoogleParaguayMap({ summaries, onSelect }: Props) {
       markersRef.current.forEach(m => m.setMap(null));
       markersRef.current = [];
 
-      summaries.forEach(s => {
-        const coords = getHospitalCoords(s.hospital);
-        if (!coords) return;
+      // Separar hospitales que comparten coordenadas (misma ciudad)
+      const placed = summaries
+        .map(s => ({ s, coords: getHospitalCoords(s.hospital) }))
+        .filter(x => x.coords) as { s: HospitalSummary; coords: { lat: number; lon: number; zona: string } }[];
+      const spread = spreadOverlaps(placed.map(x => ({ ...x.coords })));
+
+      placed.forEach(({ s, coords }, i) => {
         const color = ZONE_COLORS[coords.zona] ?? '#38bdf8';
         const marker = new maps.Marker({
           map: mapRef.current,
-          position: { lat: coords.lat, lng: coords.lon },
+          position: { lat: spread[i].lat, lng: spread[i].lon },
           title: s.hospital.nombre,
           icon: markerIcon(maps, color, s.isOnline, s.activeAlerts > 0),
           animation: s.activeAlerts > 0 ? maps.Animation.BOUNCE : undefined,

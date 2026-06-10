@@ -4,7 +4,7 @@
 
 import React, { useEffect, useRef } from 'react';
 import type { Hospital, HospitalSummary } from '@/types/plant';
-import { getHospitalCoords, ZONE_COLORS } from '@/lib/paraguay';
+import { getHospitalCoords, spreadOverlaps, ZONE_COLORS } from '@/lib/paraguay';
 import { loadLeaflet, createBaseMap, markerDivIcon } from '@/lib/leafletMaps';
 
 interface Props {
@@ -24,7 +24,14 @@ export default function LeafletParaguayMap({ summaries, onSelect }: Props) {
     let cancelled = false;
     loadLeaflet().then(L => {
       if (cancelled || !divRef.current || mapRef.current) return;
-      mapRef.current = createBaseMap(L, divRef.current);
+      const map = createBaseMap(L, divRef.current);
+      mapRef.current = map;
+      // Etiquetas de nombre visibles solo con zoom cercano (evita amontonamiento)
+      const updateLabels = () => {
+        map.getContainer().classList.toggle('lf-show-labels', map.getZoom() >= 8);
+      };
+      map.on('zoomend', updateLabels);
+      updateLabels();
     }).catch(() => {});
     return () => {
       cancelled = true;
@@ -41,14 +48,24 @@ export default function LeafletParaguayMap({ summaries, onSelect }: Props) {
       markersRef.current.forEach(m => m.remove());
       markersRef.current = [];
 
-      summaries.forEach(s => {
-        const coords = getHospitalCoords(s.hospital);
-        if (!coords) return;
+      // Separar hospitales que comparten coordenadas (misma ciudad)
+      const placed = summaries
+        .map(s => ({ s, coords: getHospitalCoords(s.hospital) }))
+        .filter(x => x.coords) as { s: HospitalSummary; coords: { lat: number; lon: number; zona: string } }[];
+      const spread = spreadOverlaps(placed.map(x => ({ ...x.coords })));
+
+      placed.forEach(({ s, coords }, i) => {
         const color = ZONE_COLORS[coords.zona] ?? '#38bdf8';
-        const marker = L.marker([coords.lat, coords.lon], {
+        const marker = L.marker([spread[i].lat, spread[i].lon], {
           icon: markerDivIcon(L, color, s.isOnline, s.activeAlerts > 0),
           title: s.hospital.nombre,
         }).addTo(mapRef.current);
+        // Etiqueta con el nombre, visible solo al acercar el zoom
+        const nombre = s.hospital.nombre.length > 24 ? s.hospital.nombre.slice(0, 22) + '…' : s.hospital.nombre;
+        marker.bindTooltip(nombre, {
+          permanent: true, direction: 'bottom', offset: [0, 8],
+          className: 'lf-hosp-label', opacity: 0.95,
+        });
 
         const html = `
           <div style="font-family:system-ui;min-width:180px">
@@ -81,6 +98,21 @@ export default function LeafletParaguayMap({ summaries, onSelect }: Props) {
         ))}
       </div>
       <div ref={divRef} style={{ width: '100%', height: 480, background: '#0f172a' }} />
+      <style>{`
+        .lf-hosp-label {
+          display: none;
+          background: rgba(15, 23, 42, 0.85);
+          border: 1px solid #334155;
+          border-radius: 6px;
+          color: #e2e8f0;
+          font-size: 10px;
+          font-weight: 600;
+          padding: 1px 6px;
+          box-shadow: 0 1px 4px rgba(0,0,0,.5);
+        }
+        .lf-hosp-label::before { display: none; }
+        .lf-show-labels .lf-hosp-label { display: block; }
+      `}</style>
     </div>
   );
 }
