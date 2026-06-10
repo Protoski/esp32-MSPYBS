@@ -66,13 +66,13 @@ export function createBaseMap(L: any, el: HTMLElement, opts: any = {}) {
   return map;
 }
 
-// Icono circular HTML para marcadores (color por zona)
+// Icono circular HTML para marcadores (color = estado de conexión)
 export function markerDivIcon(L: any, color: string, online: boolean, hasAlert: boolean) {
-  const fill = hasAlert ? '#ef4444' : online ? color : '#475569';
-  const stroke = online ? '#fff' : '#64748b';
+  const fill = color;
+  const stroke = online ? '#fff' : '#fecaca';
   const size = online ? 18 : 14;
-  const glow = online ? `box-shadow:0 0 10px 3px ${fill}80;` : '';
-  const pulse = hasAlert ? 'animation:lf-pulse 1s infinite;' : '';
+  const glow = `box-shadow:0 0 10px 3px ${fill}80;`;
+  const pulse = hasAlert || !online ? 'animation:lf-pulse 1s infinite;' : '';
   return L.divIcon({
     className: '',
     html: `<style>@keyframes lf-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.25)}}</style>

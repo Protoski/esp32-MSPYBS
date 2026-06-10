@@ -4,7 +4,7 @@
 
 import React, { useEffect, useRef } from 'react';
 import type { Hospital, HospitalSummary } from '@/types/plant';
-import { getHospitalCoords, spreadOverlaps, ZONE_COLORS } from '@/lib/paraguay';
+import { getHospitalCoords, spreadOverlaps } from '@/lib/paraguay';
 import { loadLeaflet, createBaseMap, markerDivIcon } from '@/lib/leafletMaps';
 
 interface Props {
@@ -55,7 +55,8 @@ export default function LeafletParaguayMap({ summaries, onSelect }: Props) {
       const spread = spreadOverlaps(placed.map(x => ({ ...x.coords })));
 
       placed.forEach(({ s, coords }, i) => {
-        const color = ZONE_COLORS[coords.zona] ?? '#38bdf8';
+        // Verde = en línea, ámbar = en línea con alertas, rojo = sin señal
+        const color = !s.isOnline ? '#ef4444' : s.activeAlerts > 0 ? '#f59e0b' : '#22c55e';
         const marker = L.marker([spread[i].lat, spread[i].lon], {
           icon: markerDivIcon(L, color, s.isOnline, s.activeAlerts > 0),
           title: s.hospital.nombre,
@@ -89,11 +90,11 @@ export default function LeafletParaguayMap({ summaries, onSelect }: Props) {
   return (
     <div className="relative w-full rounded-xl border border-slate-700 overflow-hidden">
       <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[500] flex flex-wrap gap-1.5 justify-center pointer-events-none">
-        {Object.entries(ZONE_COLORS).slice(0, 8).map(([z, c]) => (
-          <span key={z} className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-slate-900/80"
+        {([['En línea', '#22c55e'], ['Con alertas', '#f59e0b'], ['Sin señal', '#ef4444']] as const).map(([label, c]) => (
+          <span key={label} className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-slate-900/80"
             style={{ color: c, border: `1px solid ${c}40` }}>
             <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: c }} />
-            {z}
+            {label}
           </span>
         ))}
       </div>
