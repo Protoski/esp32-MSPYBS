@@ -1,0 +1,17 @@
+{
+  "name": "mspybs-mcp-server",
+  "version": "1.0.0",
+  "description": "Servidor MCP para consultar el estado (en línea / fuera de línea) de las plantas de gases medicinales desde Google Sheets vía Google Apps Script.",
+  "type": "module",
+  "main": "index.js",
+  "bin": {
+    "mspybs-mcp-server": "index.js"
+  },
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "zod": "^3.23.8"
+  }
+}
