@@ -72,3 +72,29 @@ MSPYBS_API_URL="https://script.google.com/macros/s/TU_DEPLOYMENT_ID/exec" npm st
 
 El servidor habla el protocolo MCP por stdio; no está pensado para ejecutarse
 de forma interactiva en la terminal, sino para ser lanzado por un cliente MCP.
+
+## Simulador de plantas (`simulate_plants.py`)
+
+Script de Python (sin dependencias externas) para probar el sistema completo
+sin necesitar los ESP32 físicos. Envía datos falsos pero realistas al mismo
+backend, y permite elegir interactivamente qué plantas se simulan como
+"en línea" — las que no elijas simplemente no reciben datos y aparecerán
+como "sin señal", igual que un equipo real desconectado.
+
+```bash
+python3 simulate_plants.py --url "https://script.google.com/macros/s/TU_DEPLOYMENT_ID/exec"
+```
+
+Al iniciar, elige los números de las plantas a simular (ej: `1,3`). Mientras
+corre, podés cambiar la selección con:
+
+```
+list              # ver estado actual
+on 1,2            # simular esas plantas como en línea
+off 2             # dejar de enviarle datos (pasa a "sin señal" tras ~60s)
+quit              # detener
+```
+
+⚠️ Esto escribe filas reales en tu Google Sheet (usa la acción `data` del
+backend). úsalo solo en un Sheet de prueba, o ten en cuenta que mezclará
+datos simulados con los reales de tus plantas.
