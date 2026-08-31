@@ -48,7 +48,7 @@ export async function fetchHospitals(): Promise<ApiHospitalsResponse> {
 }
 
 export async function createHospital(
-  data: Omit<Hospital, 'id' | 'created_at'>
+  data: Omit<Hospital, 'id' | 'created_at'> & { id?: string }
 ): Promise<ApiCommandResponse> {
   return apiPost<ApiCommandResponse>({ action: 'add_hospital', ...data });
 }

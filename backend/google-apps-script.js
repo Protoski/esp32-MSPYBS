@@ -108,7 +108,11 @@ function getHospitals_() {
 function addHospital_(body) {
   var sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName(SH_HOSP);
   if (!sheet) return err_('Hoja ' + SH_HOSP + ' no encontrada.');
-  var id = Utilities.getUuid();
+  // Permite fijar un id externo (ej. el UUID que ya usa el sistema ESP32/
+  // sensorMspbsId en SIGGAM) para que ambos sistemas identifiquen al mismo
+  // hospital con el mismo id. Si no se pasa, se genera uno como antes.
+  var id = body.id || Utilities.getUuid();
+  if (findHospitalRow_(sheet, id)) return err_('Ya existe un hospital con ese id: ' + id);
   var th = body.thresholds || {}, eq = body.equipment || {};
   sheet.appendRow([
     id, body.nombre||'', body.ciudad||'', body.direccion||'', body.activo !== false,

@@ -17,8 +17,8 @@ export default function AddHospitalPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  const [form, setForm] = useState<Omit<Hospital, 'id' | 'created_at'>>({
-    nombre: '', ciudad: '', direccion: '', activo: true,
+  const [form, setForm] = useState<Omit<Hospital, 'id' | 'created_at'> & { id?: string }>({
+    id: '', nombre: '', ciudad: '', direccion: '', activo: true,
     thresholds: { ...DEF_TH }, equipment: { ...DEF_EQ },
     lat: null, lon: null,
   });
@@ -54,6 +54,11 @@ export default function AddHospitalPage() {
             <div className="space-y-1.5"><label className="text-xs font-semibold text-slate-400">Ciudad *</label><input value={form.ciudad} onChange={e => set('ciudad', e.target.value)} placeholder="Ej: Asunción" className={inp} required /></div>
             <div className="space-y-1.5 sm:col-span-2"><label className="text-xs font-semibold text-slate-400">Dirección</label><input value={form.direccion} onChange={e => set('direccion', e.target.value)} placeholder="Ej: Calle 50 # 30-20" className={inp} /></div>
             <div className="space-y-1.5"><label className="text-xs font-semibold text-slate-400">Estado inicial</label><select value={form.activo ? 'true' : 'false'} onChange={e => set('activo', e.target.value === 'true')} className={inp}><option value="true">Activo</option><option value="false">Inactivo</option></select></div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <label className="text-xs font-semibold text-slate-400">ID externo (opcional)</label>
+              <input value={form.id ?? ''} onChange={e => set('id', e.target.value.trim())} placeholder="UUID de un sistema externo (ej. sensorMspbsId de SIGGAM)" className={`${inp} font-mono text-xs`} />
+              <p className="text-[10px] text-slate-600">Déjalo vacío para generar un ID automático. Úsalo cuando otro sistema (SIGGAM, oxigeno-app, etc.) ya tiene asignado un UUID para este hospital y necesita coincidir.</p>
+            </div>
           </div>
         </Card>
         <Card title="📍 Ubicación en el Mapa (opcional)">
