@@ -24,16 +24,30 @@
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 
+// ── ESTE FIRMWARE ESTA SUPERADO ─────────────────────────────
+// Reemplazado por hardware/kicad + el firmware MicroPython del proyecto,
+// que ademas ya no hardcodea credenciales (se cargan por un portal WiFi
+// propio y quedan solo en la memoria de la placa, nunca en este repo).
+// Se deja aca como referencia del formato de payload original.
+//
+// NUNCA pongas credenciales reales en este archivo: es un repositorio
+// publico. Completa estos 4 valores localmente antes de compilar, y no
+// los commitees.
+
 // ── CONFIGURACIÓN DE RED ────────────────────────────────────
-const char* WIFI_SSID     = "ONYX";
-const char* WIFI_PASSWORD = "oingenieria2019";
+const char* WIFI_SSID     = "TU_RED_WIFI";
+const char* WIFI_PASSWORD = "TU_CONTRASENA_WIFI";
 
 // ── URL DEL BACKEND (Google Apps Script) ───────────────────
-const char* API_URL = "https://script.google.com/macros/s/AKfycby0PXjgE7OZu17b162eEKmWzk0J6px7W4fBaiIZbzZ43eXq12_7NUfOlQ46drYPidcn/exec";
+const char* API_URL = "TU_URL_DE_APPS_SCRIPT";
 
 // ── ID DEL HOSPITAL ────────────────────────────────────────
 // Crea un hospital desde el panel admin y copia aquí su ID
-const char* HOSPITAL_ID = "247957b8-c92e-44f7-8858-819515a14731";
+const char* HOSPITAL_ID = "TU_HOSPITAL_ID";
+
+// ── TOKEN DEL DISPOSITIVO ────────────────────────────────────
+// Debe coincidir con DEVICE_TOKEN en las Propiedades del script del backend
+const char* DEVICE_TOKEN = "TU_DEVICE_TOKEN";
 
 // ── INTERVALO DE ENVÍO ─────────────────────────────────────
 const unsigned long SEND_INTERVAL_MS = 5000; // cada 5 segundos
@@ -129,6 +143,7 @@ void sendData() {
   StaticJsonDocument<512> doc;
 
   doc["action"]                = "data";
+  doc["token"]                 = DEVICE_TOKEN;
   doc["hospital_id"]           = HOSPITAL_ID;
   doc["o2_flow_m3h"]           = readO2Flow();
   doc["tower_a_pressure_bar"]  = readTowerAPressure();

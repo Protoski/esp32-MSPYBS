@@ -11,10 +11,15 @@ https://script.google.com/macros/s/AKfycby0PXjgE7OZu17b162eEKmWzk0J6px7W4fBaiIZb
 
 Todas las consultas son `GET` y devuelven JSON. No requieren autenticación.
 
-> ⚠️ Esta URL también acepta operaciones de escritura (`POST`) usadas por el
-> panel de administración interno. Este documento cubre **solo las acciones
-> de lectura** — no expongas ni uses las acciones de escritura desde una web
-> pública de terceros.
+> ⚠️ Esta URL también acepta operaciones de escritura (`POST`) usadas por los
+> dispositivos ESP32 (`action=data`) y el panel de administración interno
+> (`add_hospital`, `update_hospital`, `toggle_hospital`, `delete_hospital`).
+> Todas las acciones de escritura requieren un campo `token` en el cuerpo del
+> POST, verificado contra `DEVICE_TOKEN` / `ADMIN_TOKEN` en las Propiedades
+> del script (Extensiones → Propiedades del proyecto → Propiedades del
+> script) — nunca están en este repositorio. Este documento cubre **solo las
+> acciones de lectura**, que siguen siendo públicas por diseño (alimentan el
+> dashboard).
 
 ---
 

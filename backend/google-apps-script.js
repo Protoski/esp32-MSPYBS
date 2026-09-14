@@ -11,6 +11,21 @@ const SH_HOSP  = 'Hospitales';
 const MAX_ROWS = 500;    // registros maximos a devolver en una consulta de historial
 const SCAN_ROWS = 20000; // filas a escanear hacia atras para encontrar los de un hospital
 
+// ── AUTENTICACION ───────────────────────────────────────────
+// Los valores reales viven en Extensiones > Propiedades del script >
+// Propiedades del script (Project Settings > Script Properties), NUNCA
+// en este archivo, para poder tenerlo en un repo publico sin exponerlos.
+// DEVICE_TOKEN: lo manda cada ESP32 junto con sus lecturas (action=data).
+// ADMIN_TOKEN: lo manda el panel de administracion del frontend.
+function deviceToken_() { return PropertiesService.getScriptProperties().getProperty('DEVICE_TOKEN'); }
+function adminToken_()  { return PropertiesService.getScriptProperties().getProperty('ADMIN_TOKEN'); }
+
+function checkToken_(body, expected) {
+  if (!expected) return err_('Servidor mal configurado: falta el token en Script Properties.');
+  if (body.token !== expected) return err_('No autorizado.');
+  return null; // null = token correcto, seguir adelante
+}
+
 function ok_(data)  { return out_(Object.assign({ ok: true  }, data)); }
 function err_(msg)  { return out_({ ok: false, error: msg }); }
 function out_(data) { return ContentService.createTextOutput(JSON.stringify(data)).setMimeType(ContentService.MimeType.JSON); }
@@ -29,11 +44,28 @@ function doPost(e) {
   try {
     const body   = JSON.parse((e.postData && e.postData.contents) || '{}');
     const action = body.action || 'data';
-    if (action === 'data')            return postData_(body);
-    if (action === 'add_hospital')    return addHospital_(body);
-    if (action === 'update_hospital') return updateHospital_(body);
-    if (action === 'toggle_hospital') return toggleHospital_(body);
-    if (action === 'delete_hospital') return deleteHospital_(body);
+
+    if (action === 'data') {
+      const authErr = checkToken_(body, deviceToken_());
+      if (authErr) return authErr;
+      return postData_(body);
+    }
+
+    if (action === 'verify_token') {
+      const authErr = checkToken_(body, adminToken_());
+      return authErr || ok_({ message: 'Token valido.' });
+    }
+
+    const adminActions = ['add_hospital', 'update_hospital', 'toggle_hospital', 'delete_hospital'];
+    if (adminActions.indexOf(action) !== -1) {
+      const authErr = checkToken_(body, adminToken_());
+      if (authErr) return authErr;
+      if (action === 'add_hospital')    return addHospital_(body);
+      if (action === 'update_hospital') return updateHospital_(body);
+      if (action === 'toggle_hospital') return toggleHospital_(body);
+      if (action === 'delete_hospital') return deleteHospital_(body);
+    }
+
     return err_('Acción desconocida: ' + action);
   } catch(ex) { Logger.log('doPost ERROR: ' + ex.message); return err_(ex.message); }
 }
