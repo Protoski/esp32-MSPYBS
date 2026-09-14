@@ -28,3 +28,4 @@ Thumbs.db
 .eslintcache
 __pycache__/
 *.pyc
+hardware/kicad/erc_report.json
