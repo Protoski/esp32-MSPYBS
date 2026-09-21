@@ -63,9 +63,7 @@ def _render_form(cfg):
             "<td><input name='max__{n}' value='{mx}' size='6'></td></tr>"
         ).format(n=name, mn=s["min"], mx=s["max"])
 
-    source = cfg.get("data_source", "plc")
-    plc_selected = "selected" if source == "plc" else ""
-    sensors_selected = "selected" if source == "sensors" else ""
+    plc_checked = "checked" if cfg.get("read_plc", True) else ""
 
     return """<!DOCTYPE html><html><head><meta charset="utf-8">
 <title>Config Planta O2</title>
@@ -74,6 +72,8 @@ input,select{{width:100%;padding:6px;margin:4px 0 12px;box-sizing:border-box}}
 table{{width:100%;border-collapse:collapse}}
 td{{padding:4px;border-bottom:1px solid #ddd}}
 button{{width:100%;padding:12px;background:#1a73e8;color:#fff;border:0;border-radius:4px;font-size:16px}}
+label.chk{{display:flex;align-items:center;gap:8px}}
+label.chk input{{width:auto;margin:0}}
 </style></head><body>
 <h2>Configuracion - Monitor Planta O2</h2>
 <form method="POST" action="/guardar">
@@ -82,28 +82,27 @@ button{{width:100%;padding:12px;background:#1a73e8;color:#fff;border:0;border-ra
 <label>ID de hospital</label><input name="hospital_id" value="{hid}">
 <label>URL del Google Apps Script</label><input name="sheet_url" value="{url}">
 <label>Token del dispositivo</label><input name="device_token" value="{token}">
-<label>Intervalo de envio (segundos)</label><input name="send_interval_s" value="{interval}">
+<label>Intervalo de envio al backend (segundos)</label><input name="send_interval_s" value="{interval}">
 
-<h3>Fuente de datos</h3>
-<label>Origen</label>
-<select name="data_source">
-<option value="plc" {plc_sel}>PLC (Modbus TCP)</option>
-<option value="sensors" {sensors_sel}>Sensores 4-20mA (ADS1115) -- legacy</option>
-</select>
+<h3>PLC BOGE (Modbus TCP por Ethernet W5500)</h3>
+<label class="chk"><input type="checkbox" name="read_plc" value="1" {plc_checked}> Leer el PLC ademas de los sensores 4-20mA</label>
 <label>IP del PLC</label><input name="plc_ip" value="{plc_ip}">
 <label>Puerto Modbus TCP</label><input name="plc_port" value="{plc_port}">
 <label>Unit ID (esclavo Modbus)</label><input name="plc_unit_id" value="{plc_unit_id}">
+<label>IP propia del ESP32 en la red del PLC</label><input name="eth_esp32_ip" value="{eth_ip}">
+<label>Mascara de esa red</label><input name="eth_esp32_mask" value="{eth_mask}">
 
-<h3>Rango de cada sensor -- solo aplica con origen "Sensores" (valor a 4mA / a 20mA)</h3>
+<h3>Rango de cada sensor 4-20mA (valor a 4mA / a 20mA)</h3>
 <table><tr><th>Sensor</th><th>4mA</th><th>20mA</th></tr>{rows}</table>
 <button type="submit">Guardar y reiniciar</button>
 </form></body></html>""".format(
         ssid=cfg["wifi_ssid"], wpass=cfg["wifi_pass"], hid=cfg["hospital_id"],
         url=cfg["sheet_url"], token=cfg.get("device_token", ""),
         interval=cfg["send_interval_s"], rows=analog_rows,
-        plc_sel=plc_selected, sensors_sel=sensors_selected,
+        plc_checked=plc_checked,
         plc_ip=cfg.get("plc_ip", ""), plc_port=cfg.get("plc_port", 501),
         plc_unit_id=cfg.get("plc_unit_id", 1),
+        eth_ip=cfg.get("eth_esp32_ip", ""), eth_mask=cfg.get("eth_esp32_mask", ""),
     )
 
 
@@ -138,7 +137,9 @@ def start_ap_and_serve(cfg):
                     cfg["send_interval_s"] = int(fields.get("send_interval_s", cfg["send_interval_s"]))
                 except ValueError:
                     pass
-                cfg["data_source"] = fields.get("data_source", cfg.get("data_source", "plc"))
+                # Los checkbox no configurados no vienen en el POST -- su
+                # ausencia significa "desmarcado".
+                cfg["read_plc"] = "read_plc" in fields
                 cfg["plc_ip"] = fields.get("plc_ip", cfg.get("plc_ip", ""))
                 try:
                     cfg["plc_port"] = int(fields.get("plc_port", cfg.get("plc_port", 501)))
@@ -148,6 +149,8 @@ def start_ap_and_serve(cfg):
                     cfg["plc_unit_id"] = int(fields.get("plc_unit_id", cfg.get("plc_unit_id", 1)))
                 except ValueError:
                     pass
+                cfg["eth_esp32_ip"] = fields.get("eth_esp32_ip", cfg.get("eth_esp32_ip", ""))
+                cfg["eth_esp32_mask"] = fields.get("eth_esp32_mask", cfg.get("eth_esp32_mask", ""))
                 for name in cfg["analog"]:
                     mn = fields.get("min__" + name)
                     mx = fields.get("max__" + name)
