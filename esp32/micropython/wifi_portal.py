@@ -63,10 +63,14 @@ def _render_form(cfg):
             "<td><input name='max__{n}' value='{mx}' size='6'></td></tr>"
         ).format(n=name, mn=s["min"], mx=s["max"])
 
+    source = cfg.get("data_source", "plc")
+    plc_selected = "selected" if source == "plc" else ""
+    sensors_selected = "selected" if source == "sensors" else ""
+
     return """<!DOCTYPE html><html><head><meta charset="utf-8">
 <title>Config Planta O2</title>
 <style>body{{font-family:sans-serif;max-width:480px;margin:20px auto;padding:0 12px}}
-input{{width:100%;padding:6px;margin:4px 0 12px;box-sizing:border-box}}
+input,select{{width:100%;padding:6px;margin:4px 0 12px;box-sizing:border-box}}
 table{{width:100%;border-collapse:collapse}}
 td{{padding:4px;border-bottom:1px solid #ddd}}
 button{{width:100%;padding:12px;background:#1a73e8;color:#fff;border:0;border-radius:4px;font-size:16px}}
@@ -79,13 +83,27 @@ button{{width:100%;padding:12px;background:#1a73e8;color:#fff;border:0;border-ra
 <label>URL del Google Apps Script</label><input name="sheet_url" value="{url}">
 <label>Token del dispositivo</label><input name="device_token" value="{token}">
 <label>Intervalo de envio (segundos)</label><input name="send_interval_s" value="{interval}">
-<h3>Rango de cada sensor (valor a 4mA / a 20mA)</h3>
+
+<h3>Fuente de datos</h3>
+<label>Origen</label>
+<select name="data_source">
+<option value="plc" {plc_sel}>PLC (Modbus TCP)</option>
+<option value="sensors" {sensors_sel}>Sensores 4-20mA (ADS1115) -- legacy</option>
+</select>
+<label>IP del PLC</label><input name="plc_ip" value="{plc_ip}">
+<label>Puerto Modbus TCP</label><input name="plc_port" value="{plc_port}">
+<label>Unit ID (esclavo Modbus)</label><input name="plc_unit_id" value="{plc_unit_id}">
+
+<h3>Rango de cada sensor -- solo aplica con origen "Sensores" (valor a 4mA / a 20mA)</h3>
 <table><tr><th>Sensor</th><th>4mA</th><th>20mA</th></tr>{rows}</table>
 <button type="submit">Guardar y reiniciar</button>
 </form></body></html>""".format(
         ssid=cfg["wifi_ssid"], wpass=cfg["wifi_pass"], hid=cfg["hospital_id"],
         url=cfg["sheet_url"], token=cfg.get("device_token", ""),
         interval=cfg["send_interval_s"], rows=analog_rows,
+        plc_sel=plc_selected, sensors_sel=sensors_selected,
+        plc_ip=cfg.get("plc_ip", ""), plc_port=cfg.get("plc_port", 501),
+        plc_unit_id=cfg.get("plc_unit_id", 1),
     )
 
 
@@ -118,6 +136,16 @@ def start_ap_and_serve(cfg):
                 cfg["device_token"] = fields.get("device_token", cfg.get("device_token", ""))
                 try:
                     cfg["send_interval_s"] = int(fields.get("send_interval_s", cfg["send_interval_s"]))
+                except ValueError:
+                    pass
+                cfg["data_source"] = fields.get("data_source", cfg.get("data_source", "plc"))
+                cfg["plc_ip"] = fields.get("plc_ip", cfg.get("plc_ip", ""))
+                try:
+                    cfg["plc_port"] = int(fields.get("plc_port", cfg.get("plc_port", 501)))
+                except ValueError:
+                    pass
+                try:
+                    cfg["plc_unit_id"] = int(fields.get("plc_unit_id", cfg.get("plc_unit_id", 1)))
                 except ValueError:
                     pass
                 for name in cfg["analog"]:
