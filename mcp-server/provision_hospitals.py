@@ -10,7 +10,7 @@ backend devuelve error y este script simplemente lo reporta y sigue con el
 resto (no falla, no duplica nada).
 
 Uso:
-    python3 provision_hospitals.py --url "https://script.google.com/macros/s/XXX/exec"
+    python3 provision_hospitals.py --url "https://script.google.com/macros/s/XXX/exec" --token "ADMIN_TOKEN"
 
 Para agregar otros hospitales, edita la lista HOSPITALS más abajo.
 """
@@ -48,16 +48,21 @@ def api_post(base_url: str, body: dict) -> dict:
 def main():
     parser = argparse.ArgumentParser(description="Provisionar hospitales con id externo predefinido.")
     parser.add_argument("--url", default=os.environ.get("MSPYBS_API_URL"))
+    parser.add_argument("--token", default=os.environ.get("MSPYBS_ADMIN_TOKEN"))
     args = parser.parse_args()
 
     if not args.url:
         print("❌ Falta la URL del backend. Usa --url o la variable MSPYBS_API_URL.")
+        sys.exit(1)
+    if not args.token:
+        print("❌ Falta el ADMIN_TOKEN. Usa --token o la variable MSPYBS_ADMIN_TOKEN.")
         sys.exit(1)
 
     print(f"🔌 Conectando a: {args.url}\n")
     for h in HOSPITALS:
         body = {
             "action": "add_hospital",
+            "token": args.token,
             "id": h["id"],
             "nombre": h["nombre"],
             "ciudad": h["ciudad"],
