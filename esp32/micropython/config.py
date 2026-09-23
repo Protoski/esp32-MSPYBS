@@ -12,6 +12,11 @@ DEFAULTS = {
     "wifi_ssid": "",
     "wifi_pass": "",
     "hospital_id": "",
+    # Equipo dentro del hospital (un hospital puede tener varias plantas de
+    # O2 o bombas): unit_id libre, ej. "O2-1"; unit_type "o2", "air",
+    # "vacuum" o "" si este ESP32 mide todos los tipos de la planta.
+    "unit_id": "",
+    "unit_type": "",
     "sheet_url": "",
     "device_token": "",
     "action": "data",

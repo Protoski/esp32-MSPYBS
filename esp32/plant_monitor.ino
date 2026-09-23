@@ -35,6 +35,10 @@
 #include "secrets.h"
 
 const char* HOSPITAL_ID = "247957b8-c92e-44f7-8858-819515a14731";
+// Equipo dentro del hospital: cada planta de O2 con su propio ESP32 lleva un
+// UNIT_ID distinto (O2-1, O2-2...). Mismo HOSPITAL_ID en todos.
+const char* UNIT_ID     = "O2-1";
+const char* UNIT_TYPE   = "o2";
 
 const unsigned long SEND_INTERVAL_MS = 5000;
 
@@ -312,6 +316,8 @@ void sendData(bool online) {
   doc["action"]      = "data";
   doc["token"]       = DEVICE_TOKEN;
   doc["hospital_id"] = HOSPITAL_ID;
+  doc["unit_id"]     = UNIT_ID;
+  doc["unit_type"]   = UNIT_TYPE;
   doc["plc_online"]  = online;
 
   if (hayDatos) {

@@ -130,6 +130,10 @@ def read_digital_fields(cfg, pins, runtime, elapsed_s):
 
 def build_payload(cfg, analog_values, digital_values):
     payload = {"action": cfg["action"], "token": cfg["device_token"], "hospital_id": cfg["hospital_id"]}
+    if cfg.get("unit_id"):
+        payload["unit_id"] = cfg["unit_id"]
+    if cfg.get("unit_type"):
+        payload["unit_type"] = cfg["unit_type"]
     payload.update(analog_values)
     payload.update(digital_values)
     return payload

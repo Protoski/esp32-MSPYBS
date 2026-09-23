@@ -80,6 +80,13 @@ label.chk input{{width:auto;margin:0}}
 <label>Red WiFi (SSID)</label><input name="wifi_ssid" value="{ssid}">
 <label>Contrasena WiFi</label><input name="wifi_pass" type="password" value="{wpass}">
 <label>ID de hospital</label><input name="hospital_id" value="{hid}">
+<label>ID del equipo en el hospital (ej. O2-1, VAC-2)</label><input name="unit_id" value="{unit_id}">
+<label>Tipo de equipo</label><select name="unit_type">
+<option value="" {ut_all}>Todos (una sola planta completa)</option>
+<option value="o2" {ut_o2}>Planta de oxigeno</option>
+<option value="air" {ut_air}>Aire medicinal / compresor</option>
+<option value="vacuum" {ut_vac}>Bomba de vacio</option>
+</select>
 <label>URL del Google Apps Script</label><input name="sheet_url" value="{url}">
 <label>Token del dispositivo</label><input name="device_token" value="{token}">
 <label>Intervalo de envio al backend (segundos)</label><input name="send_interval_s" value="{interval}">
@@ -97,6 +104,11 @@ label.chk input{{width:auto;margin:0}}
 <button type="submit">Guardar y reiniciar</button>
 </form></body></html>""".format(
         ssid=cfg["wifi_ssid"], wpass=cfg["wifi_pass"], hid=cfg["hospital_id"],
+        unit_id=cfg.get("unit_id", ""),
+        ut_all="selected" if not cfg.get("unit_type") else "",
+        ut_o2="selected" if cfg.get("unit_type") == "o2" else "",
+        ut_air="selected" if cfg.get("unit_type") == "air" else "",
+        ut_vac="selected" if cfg.get("unit_type") == "vacuum" else "",
         url=cfg["sheet_url"], token=cfg.get("device_token", ""),
         interval=cfg["send_interval_s"], rows=analog_rows,
         plc_checked=plc_checked,
@@ -131,6 +143,9 @@ def start_ap_and_serve(cfg):
                 cfg["wifi_ssid"] = fields.get("wifi_ssid", cfg["wifi_ssid"])
                 cfg["wifi_pass"] = fields.get("wifi_pass", cfg["wifi_pass"])
                 cfg["hospital_id"] = fields.get("hospital_id", cfg["hospital_id"])
+                cfg["unit_id"] = fields.get("unit_id", cfg.get("unit_id", "")).strip()
+                ut = fields.get("unit_type", cfg.get("unit_type", ""))
+                cfg["unit_type"] = ut if ut in ("", "o2", "air", "vacuum") else ""
                 cfg["sheet_url"] = fields.get("sheet_url", cfg["sheet_url"])
                 cfg["device_token"] = fields.get("device_token", cfg.get("device_token", ""))
                 try:
