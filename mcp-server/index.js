@@ -99,6 +99,29 @@ function findHospital(hospitals, query) {
   );
 }
 
+const UNIT_TYPE_TEXT = { o2: "planta de O₂", air: "aire medicinal", vacuum: "bomba de vacío" };
+
+// Una línea por equipo del hospital (solo si tiene más de uno).
+function unitLines(latestRow, nowIso) {
+  const units = latestRow?.units ?? [];
+  if (units.length < 2) return [];
+  return units.map((u) => {
+    const st = computeStatus(u, nowIso);
+    const type = u.unit_type ? ` (${UNIT_TYPE_TEXT[u.unit_type] ?? u.unit_type})` : "";
+    let detail = "";
+    if (st.online && (!u.unit_type || u.unit_type === "o2")) {
+      detail = u.plc_plant_state != null && u.plc_plant_state !== 1
+        ? ` — generador detenido (${u.plc_plant_state_label ?? u.plc_plant_state})`
+        : ` — pureza ${Number(u.o2_purity_pct).toFixed(1)}%`;
+    } else if (st.online && u.unit_type === "vacuum") {
+      detail = ` — vacío ${Number(u.vacuum_level_mmhg).toFixed(0)} mmHg`;
+    } else if (st.online && u.unit_type === "air") {
+      detail = ` — aire ${Number(u.air_line_pressure_bar).toFixed(2)} bar`;
+    }
+    return `    · ${u.unit_id || "equipo"}${type}: ${st.online ? "🟢 en línea" : `🔴 sin señal${st.lastSeen ? ` (hace ${st.ageSeconds}s)` : ""}`}${detail}`;
+  });
+}
+
 async function buildStatusList() {
   const [hospitals, { rows, now }] = await Promise.all([
     fetchHospitals(),
@@ -117,6 +140,7 @@ async function buildStatusList() {
       online: h.activo ? status.online : false,
       lastSeen: status.lastSeen,
       ageSeconds: status.ageSeconds,
+      units: unitLines(latestByHospital[h.id], now),
     };
   });
 }
@@ -166,6 +190,7 @@ server.registerTool(
       status.lastSeen
         ? `Último dato recibido: ${status.lastSeen} (hace ${status.ageSeconds}s)`
         : "Sin datos recibidos.",
+      ...(latest?.units?.length > 1 ? [`Equipos (${latest.units.length}):`, ...unitLines(latest, now)] : []),
     ];
 
     return { content: [{ type: "text", text: lines.join("\n") }] };
@@ -192,7 +217,7 @@ server.registerTool(
           p.online ? "🟢 EN LÍNEA" : "🔴 SIN SEÑAL"
         }${p.activo ? "" : " [inactivo]"}${
           p.lastSeen ? ` — último dato hace ${p.ageSeconds}s` : " — sin datos"
-        }`
+        }${p.units.length ? "\n" + p.units.join("\n") : ""}`
     );
     return { content: [{ type: "text", text: lines.join("\n") }] };
   }

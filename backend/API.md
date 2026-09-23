@@ -165,6 +165,45 @@ Las plantas que no tienen un equipo (por ejemplo, sin bomba de vacío) envían
 `0` en esos campos; consulta `equipment` en `action=hospitals` antes de
 interpretarlos.
 
+## Varios equipos por hospital (`unit_id`, `unit_type`, `units`)
+
+Un hospital puede tener varias plantas de O₂, compresores de aire y bombas de
+vacío, cada una con su propio ESP32. Todas usan el mismo `hospital_id` (el
+`sensorMspbsId` de SIGGAM) y se distinguen por:
+
+| Campo | Descripción |
+|---|---|
+| `unit_id` | Identificador del equipo dentro del hospital, ej. `O2-1`, `O2-2`, `VAC-1`. `null` en equipos antiguos (un único equipo) |
+| `unit_type` | `o2`, `air` o `vacuum`. `null` = el equipo mide todos los tipos (planta completa) |
+
+**`latest_all`** sigue devolviendo **una fila por hospital** (compatible con
+clientes existentes). Si el hospital tiene un solo equipo, esa fila es su
+última lectura sin cambios. Si tiene varios, es un **resumen** de los equipos
+en línea (o de todos, si ninguno lo está):
+
+- Pureza, torres, tanque, punto de rocío PSA y campos `plc_*`: los de la planta
+  de O₂ en peor estado entre las que están produciendo (menor pureza); si
+  ninguna produce, los de la planta con el dato más reciente.
+- `o2_flow_m3h`: suma de todas las plantas de O₂.
+- Aire: menor presión de línea, mayor punto de rocío; `compressor_status`
+  `FAULT` si alguno está en falla, si no `ON` si alguno está en marcha.
+- Vacío: el nivel menos negativo (peor); `vacuum_pump_status` con la misma regla.
+- En el resumen, `unit_id` y `unit_type` valen `null`.
+
+Cada fila de `latest_all` trae además **`units`**: la última lectura de cada
+equipo del hospital (con su `unit_id`, `unit_type` y sus propios campos). Para
+saber si un equipo concreto está en línea, aplica la regla de 60 s a su
+`timestamp`.
+
+**`data`** acepta `unit_id` para el historial de un solo equipo:
+
+```
+GET {BASE_URL}?action=data&hospital_id=247957b8-...&unit_id=O2-2
+```
+
+Sin `unit_id`, devuelve las lecturas de todos los equipos del hospital
+mezcladas en orden cronológico, cada una con su `unit_id`.
+
 ## Datos del PLC BOGE (`plc_*`)
 
 Las plantas con generador de O₂ BOGE (PLC Siemens S7-1200) envían además estos
