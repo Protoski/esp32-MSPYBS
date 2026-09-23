@@ -35,7 +35,7 @@ function doGet(e) {
     const action = (e.parameter && e.parameter.action) || 'data';
     if (action === 'hospitals')  return getHospitals_();
     if (action === 'latest_all') return getLatestAll_();
-    if (action === 'data')       return getData_(e.parameter && e.parameter.hospital_id);
+    if (action === 'data')       return getData_(e.parameter && e.parameter.hospital_id, e.parameter && e.parameter.unit_id);
     return err_('Acción desconocida: ' + action);
   } catch(ex) { Logger.log('doGet ERROR: ' + ex.message); return err_(ex.message); }
 }
@@ -84,22 +84,34 @@ const PLC_FIELDS = [
   'plc_alarms', 'plc_faults', 'plc_alarms_ack', 'plc_valves', 'plc_life_bit',
 ];
 const PLC_JSON_FIELDS = ['plc_alarms_ack', 'plc_valves'];
-const DATA_COLS = LEGACY_COLS + PLC_FIELDS.length;
+// Un hospital puede tener varios equipos, cada uno con su ESP32: unit_id
+// (ej. "O2-1", "VAC-2") y unit_type ("o2" | "air" | "vacuum"). Vacíos en
+// equipos antiguos, que cuentan como un único equipo de todos los tipos.
+const UNIT_FIELDS = ['unit_id', 'unit_type'];
+const UNIT_TYPES = ['o2', 'air', 'vacuum'];
+const EXTRA_FIELDS = PLC_FIELDS.concat(UNIT_FIELDS);
+const DATA_COLS = LEGACY_COLS + EXTRA_FIELDS.length;
+const ONLINE_MS = 60000;
 
-function ensurePlcHeaders_(sheet) {
+function ensureExtraHeaders_(sheet) {
   if (sheet.getMaxColumns() >= DATA_COLS &&
-      sheet.getRange(1, LEGACY_COLS + 1).getValue() === PLC_FIELDS[0]) return;
+      sheet.getRange(1, DATA_COLS).getValue() === EXTRA_FIELDS[EXTRA_FIELDS.length - 1]) return;
   if (sheet.getMaxColumns() < DATA_COLS) {
     sheet.insertColumnsAfter(sheet.getMaxColumns(), DATA_COLS - sheet.getMaxColumns());
   }
-  sheet.getRange(1, LEGACY_COLS + 1, 1, PLC_FIELDS.length).setValues([PLC_FIELDS])
+  sheet.getRange(1, LEGACY_COLS + 1, 1, EXTRA_FIELDS.length).setValues([EXTRA_FIELDS])
     .setFontWeight('bold').setBackground('#0f172a').setFontColor('#38bdf8');
 }
 
-// Filas de equipos sin PLC dejan estas celdas vacías (se devuelven como null).
-function plcCell_(body, key) {
+// Campos que el equipo no envía quedan vacíos (se devuelven como null).
+function extraCell_(body, key) {
   var v = body[key];
   if (v === undefined || v === null) return '';
+  if (key === 'unit_id') return String(v).trim();
+  if (key === 'unit_type') {
+    v = String(v).trim().toLowerCase();
+    return UNIT_TYPES.indexOf(v) !== -1 ? v : '';
+  }
   if (PLC_JSON_FIELDS.indexOf(key) !== -1) return JSON.stringify(v);
   return v;
 }
@@ -117,7 +129,7 @@ function readDataRows_(sheet, start, last) {
 function postData_(body) {
   var sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName(SH_DATA);
   if (!sheet) return err_('Hoja ' + SH_DATA + ' no encontrada.');
-  ensurePlcHeaders_(sheet);
+  ensureExtraHeaders_(sheet);
   // Guardamos el timestamp como texto ISO (UTC). Si se guarda como objeto
   // Date, Google Sheets lo reinterpreta segun la zona horaria de la hoja al
   // leerlo, desfasandolo varias horas y rompiendo la deteccion de conexion.
@@ -129,12 +141,12 @@ function postData_(body) {
     body.compressor_hours||0, body.air_line_pressure_bar||0,
     body.air_dewpoint_c||0, body.vacuum_pump_status||'', body.vacuum_level_mmhg||0,
   ];
-  PLC_FIELDS.forEach(function(k) { row.push(plcCell_(body, k)); });
+  EXTRA_FIELDS.forEach(function(k) { row.push(extraCell_(body, k)); });
   sheet.appendRow(row);
   return ok_({ timestamp: new Date().toISOString() });
 }
 
-function getData_(hospitalId) {
+function getData_(hospitalId, unitId) {
   var sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName(SH_DATA);
   if (!sheet) return ok_({ count: 0, rows: [], now: new Date().toISOString() });
   var last = sheet.getLastRow();
@@ -143,7 +155,10 @@ function getData_(hospitalId) {
   // equipo lleve tiempo sin enviar (sus filas quedan empujadas hacia arriba).
   var start = Math.max(2, last - SCAN_ROWS + 1);
   var vals  = readDataRows_(sheet, start, last);
-  var rows  = vals.filter(function(r) { return !hospitalId || r[1] === hospitalId; }).slice(-MAX_ROWS).map(rowToObj_);
+  var unitCol = LEGACY_COLS + EXTRA_FIELDS.indexOf('unit_id');
+  var rows  = vals.filter(function(r) {
+    return (!hospitalId || r[1] === hospitalId) && (!unitId || String(r[unitCol]) === unitId);
+  }).slice(-MAX_ROWS).map(rowToObj_);
   return ok_({ count: rows.length, rows: rows, now: new Date().toISOString() });
 }
 
@@ -154,9 +169,89 @@ function getLatestAll_() {
   if (last < 2) return ok_({ count: 0, rows: [], now: new Date().toISOString() });
   var start = Math.max(2, last - SCAN_ROWS + 1);
   var vals  = readDataRows_(sheet, start, last);
-  var map   = {};
-  vals.forEach(function(r) { if (r[1]) map[r[1]] = rowToObj_(r); });
-  return ok_({ count: Object.keys(map).length, rows: Object.values(map), now: new Date().toISOString() });
+  var unitCol = LEGACY_COLS + EXTRA_FIELDS.indexOf('unit_id');
+  // Última lectura de cada equipo, agrupada por hospital
+  var byHosp = {};
+  vals.forEach(function(r) {
+    if (!r[1]) return;
+    var h = byHosp[r[1]] || (byHosp[r[1]] = {});
+    h[String(r[unitCol] || '')] = r;
+  });
+  var nowMs = Date.now();
+  var rows = Object.keys(byHosp).map(function(hid) {
+    var units = Object.keys(byHosp[hid]).map(function(k) { return rowToObj_(byHosp[hid][k]); });
+    units.sort(function(a, b) { return String(a.unit_id || '').localeCompare(String(b.unit_id || '')); });
+    var summary = units.length === 1 ? Object.assign({}, units[0]) : summarizeUnits_(units, nowMs);
+    summary.units = units;
+    return summary;
+  });
+  return ok_({ count: rows.length, rows: rows, now: new Date(nowMs).toISOString() });
+}
+
+function isOnline_(u, nowMs) {
+  var t = u.timestamp ? new Date(u.timestamp).getTime() : 0;
+  return Math.abs(nowMs - t) < ONLINE_MS;
+}
+
+function hasType_(u, type) { return !u.unit_type || u.unit_type === type; }
+
+function purityEvaluable_(u) {
+  if (u.plc_online === false) return false;
+  return u.plc_plant_state === null || u.plc_plant_state === undefined || Number(u.plc_plant_state) === 1;
+}
+
+// Elige el equipo "peor" según compare(a, b) < 0 => a es peor.
+function worst_(list, compare) {
+  return list.reduce(function(w, u) { return (w === null || compare(u, w) < 0) ? u : w; }, null);
+}
+
+// Resumen de un hospital con varios equipos, con la misma forma que una
+// lectura individual (compatible con quien lee una fila por hospital):
+// pureza y datos PLC de la planta de O2 en peor estado, caudal de O2 sumado,
+// peor presión de aire y peor vacío. Solo cuentan los equipos en línea; si
+// no hay ninguno, se usan todos.
+function summarizeUnits_(units, nowMs) {
+  var online = units.filter(function(u) { return isOnline_(u, nowMs); });
+  var pool = online.length ? online : units;
+  var latest = worst_(units, function(a, b) { return String(b.timestamp).localeCompare(String(a.timestamp)); });
+  var s = Object.assign({}, latest);
+  s.unit_id = null;
+  s.unit_type = null;
+
+  var o2 = pool.filter(function(u) { return hasType_(u, 'o2'); });
+  if (o2.length) {
+    var producing = o2.filter(purityEvaluable_);
+    var rep = producing.length
+      ? worst_(producing, function(a, b) { return Number(a.o2_purity_pct) - Number(b.o2_purity_pct); })
+      : worst_(o2, function(a, b) { return String(b.timestamp).localeCompare(String(a.timestamp)); });
+    ['o2_purity_pct', 'tower_a_pressure_bar', 'tower_b_pressure_bar', 'o2_tank_pressure_bar',
+     'psa_dewpoint_c'].concat(PLC_FIELDS).forEach(function(k) { s[k] = rep[k]; });
+    s.o2_flow_m3h = o2.reduce(function(t, u) { return t + (Number(u.o2_flow_m3h) || 0); }, 0);
+  }
+
+  var air = pool.filter(function(u) { return hasType_(u, 'air'); });
+  if (air.length) {
+    var a = worst_(air, function(x, y) { return Number(x.air_line_pressure_bar) - Number(y.air_line_pressure_bar); });
+    s.air_line_pressure_bar = a.air_line_pressure_bar;
+    s.air_dewpoint_c = Math.max.apply(null, air.map(function(u) { return Number(u.air_dewpoint_c) || -999; }));
+    s.compressor_status = statusOf_(air, 'compressor_status');
+    s.compressor_hours = Math.max.apply(null, air.map(function(u) { return Number(u.compressor_hours) || 0; }));
+  }
+
+  var vac = pool.filter(function(u) { return hasType_(u, 'vacuum'); });
+  if (vac.length) {
+    // mmHg negativos: el valor más alto (menos negativo) es el peor vacío
+    s.vacuum_level_mmhg = Math.max.apply(null, vac.map(function(u) { return Number(u.vacuum_level_mmhg); }));
+    s.vacuum_pump_status = statusOf_(vac, 'vacuum_pump_status');
+  }
+  return s;
+}
+
+function statusOf_(list, key) {
+  var v = list.map(function(u) { return u[key]; });
+  if (v.indexOf('FAULT') !== -1) return 'FAULT';
+  if (v.indexOf('ON') !== -1) return 'ON';
+  return v.indexOf('OFF') !== -1 ? 'OFF' : '';
 }
 
 function rowToObj_(r) {
@@ -171,7 +266,7 @@ function rowToObj_(r) {
     psa_dewpoint_c: r[7], compressor_status: r[8], compressor_hours: r[9],
     air_line_pressure_bar: r[10], air_dewpoint_c: r[11], vacuum_pump_status: r[12], vacuum_level_mmhg: r[13],
   };
-  PLC_FIELDS.forEach(function(k, i) {
+  EXTRA_FIELDS.forEach(function(k, i) {
     var v = r[LEGACY_COLS + i];
     if (v === '' || v === undefined) { obj[k] = null; return; }
     if (PLC_JSON_FIELDS.indexOf(k) !== -1) {
@@ -301,7 +396,7 @@ function initAll() {
   var d  = ss.getSheetByName(SH_DATA) || ss.insertSheet(SH_DATA);
   var h  = ss.getSheetByName(SH_HOSP) || ss.insertSheet(SH_HOSP);
   styleHeaders_(d, ['Timestamp','hospital_id','Caudal_O2_m3h','Presion_Torre_A_bar','Presion_Torre_B_bar','Presion_Tanque_O2_bar','Pureza_O2_pct','DewPoint_PSA_C','Estado_Compresor','Horas_Compresor','Presion_Linea_Aire_bar','DewPoint_Aire_C','Estado_Bomba_Vacio','Nivel_Vacio_mmHg']);
-  ensurePlcHeaders_(d);
+  ensureExtraHeaders_(d);
   styleHeaders_(h, ['id','nombre','ciudad','direccion','activo','o2_purity_warn','o2_purity_critical','air_pressure_min','air_pressure_max','vacuum_min_mmhg','equipment_json','created_at','lat','lon']);
   Logger.log('✅ Hojas inicializadas.');
 }
