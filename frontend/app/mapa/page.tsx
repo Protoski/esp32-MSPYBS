@@ -30,7 +30,7 @@ export default function MapaPage() {
         const ageMs = refMs - new Date(latest.timestamp).getTime();
         isOnline = ageMs < 60_000 && ageMs > -60_000;
       }
-      return { hospital: h, latest, isOnline, activeAlerts: latest ? buildAlerts(latest, h).length : 0 };
+      return { hospital: h, latest, isOnline, activeAlerts: latest ? buildAlerts(latest, h, refMs).length : 0 };
     }) as HospitalSummary[];
 
     setSummaries(results);

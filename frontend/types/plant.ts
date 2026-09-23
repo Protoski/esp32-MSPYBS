@@ -39,7 +39,15 @@ export interface PlantRow {
   plc_alarms_ack?:              number[] | null;
   plc_valves?:                  number[] | null;
   plc_life_bit?:                number | null;
+  // Equipo dentro del hospital (null en equipos antiguos = único equipo)
+  unit_id?:   string | null;
+  unit_type?: UnitType | null;
+  // Solo en latest_all: la fila es el resumen del hospital y aquí va la
+  // última lectura de cada equipo
+  units?:     PlantRow[];
 }
+
+export type UnitType = 'o2' | 'air' | 'vacuum';
 
 export interface HospitalThresholds {
   o2_purity_warn:     number;

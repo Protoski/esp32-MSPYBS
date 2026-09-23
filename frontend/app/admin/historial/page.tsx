@@ -12,6 +12,7 @@ const fmtDate = (iso: string | null) =>
 
 const COLS = [
   { key: 'timestamp',            label: 'Fecha / Hora',        fmt: (v: unknown) => fmt(v as string) },
+  { key: 'unit_id',              label: 'Equipo',              fmt: (v: unknown) => (v ? String(v) : '—') },
   { key: 'o2_purity_pct',        label: 'Pureza O₂ (%)',       fmt: (v: unknown) => Number(v).toFixed(2) },
   { key: 'o2_flow_m3h',          label: 'Caudal O₂ (m³/h)',    fmt: (v: unknown) => Number(v).toFixed(2) },
   { key: 'tower_a_pressure_bar', label: 'Presión Torre A (bar)',fmt: (v: unknown) => Number(v).toFixed(2) },

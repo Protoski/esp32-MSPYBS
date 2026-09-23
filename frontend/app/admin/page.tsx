@@ -2,7 +2,7 @@
 
 import React, { useState, useCallback } from 'react';
 import Link from 'next/link';
-import { fetchHospitals, fetchPlantData, toggleHospital, deleteHospital } from '@/lib/api';
+import { fetchHospitals, fetchAllLatest, toggleHospital, deleteHospital } from '@/lib/api';
 import { usePolling } from '@/hooks/usePolling';
 import type { Hospital, PlantRow } from '@/types/plant';
 import { buildAlerts } from '@/components/AlertBanner';
@@ -14,16 +14,16 @@ export default function AdminOverview() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [nowMs, setNowMs] = useState<number | undefined>(undefined);
 
   const load = useCallback(async () => {
     try {
-      const { hospitals: hs } = await fetchHospitals();
+      const [{ hospitals: hs }, latestRes] = await Promise.all([fetchHospitals(), fetchAllLatest()]);
       setHospitals(hs);
-      const entries = await Promise.all(hs.map(async (h: Hospital) => {
-        try { const { rows } = await fetchPlantData(h.id); return [h.id, rows[rows.length - 1] ?? null]; }
-        catch { return [h.id, null]; }
-      }));
-      setLatestMap(Object.fromEntries(entries));
+      const map: Record<string, PlantRow | null> = {};
+      (latestRes.rows ?? []).forEach((r: PlantRow) => { map[r.hospital_id] = r; });
+      setLatestMap(map);
+      setNowMs(latestRes.now ? new Date(latestRes.now).getTime() : Date.now());
       setError(null);
     } catch (err) { setError(err instanceof Error ? err.message : 'Error'); }
     finally { setLoading(false); }
@@ -39,7 +39,7 @@ export default function AdminOverview() {
   const totalAlerts = Object.entries(latestMap).reduce((acc, [id, latest]) => {
     if (!latest) return acc;
     const h = hospitals.find(x => x.id === id);
-    return acc + (h ? buildAlerts(latest, h).length : 0);
+    return acc + (h ? buildAlerts(latest, h, nowMs).length : 0);
   }, 0);
 
   return (
@@ -70,7 +70,7 @@ export default function AdminOverview() {
           <div className="md:hidden space-y-3">
             {hospitals.map(h => {
               const latest = latestMap[h.id];
-              const alerts = latest ? buildAlerts(latest, h).length : 0;
+              const alerts = latest ? buildAlerts(latest, h, nowMs).length : 0;
               return (
                 <div key={h.id} className="rounded-xl border border-slate-700 bg-slate-900/50 p-4 space-y-3">
                   <div className="flex items-start justify-between gap-2">
@@ -118,7 +118,7 @@ export default function AdminOverview() {
                 <tbody className="divide-y divide-slate-800">
                   {hospitals.map(h => {
                     const latest = latestMap[h.id];
-                    const alerts = latest ? buildAlerts(latest, h).length : 0;
+                    const alerts = latest ? buildAlerts(latest, h, nowMs).length : 0;
                     return (
                       <tr key={h.id} className="bg-slate-900/50 hover:bg-slate-800/50 transition-colors">
                         <td className="px-4 py-3"><p className="font-semibold text-slate-200">{h.nombre}</p><p className="text-[10px] text-slate-500">{h.direccion}</p></td>

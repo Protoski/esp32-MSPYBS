@@ -30,7 +30,7 @@ export default function OverviewPage() {
           const ageMs = refMs - new Date(latest.timestamp).getTime();
           isOnline = ageMs < 60_000 && ageMs > -60_000;
         }
-        const activeAlerts = latest ? buildAlerts(latest, h).length : 0;
+        const activeAlerts = latest ? buildAlerts(latest, h, refMs).length : 0;
         return { hospital: h, latest, isOnline, activeAlerts } as HospitalSummary;
       });
       setSummaries(results);
