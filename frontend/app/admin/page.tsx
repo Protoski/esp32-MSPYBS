@@ -6,6 +6,7 @@ import { fetchHospitals, fetchPlantData, toggleHospital, deleteHospital } from '
 import { usePolling } from '@/hooks/usePolling';
 import type { Hospital, PlantRow } from '@/types/plant';
 import { buildAlerts } from '@/components/AlertBanner';
+import { purityEvaluable, generatorStatusText } from '@/lib/plc';
 
 export default function AdminOverview() {
   const [hospitals, setHospitals] = useState<Hospital[]>([]);
@@ -85,7 +86,7 @@ export default function AdminOverview() {
                     <div>
                       <p className="text-slate-500 text-[10px] uppercase tracking-wider">Pureza O₂</p>
                       {latest
-                        ? <span className={`font-bold ${latest.o2_purity_pct >= h.thresholds.o2_purity_warn ? 'text-green-400' : latest.o2_purity_pct >= h.thresholds.o2_purity_critical ? 'text-amber-400' : 'text-red-400'}`}>{latest.o2_purity_pct.toFixed(1)}%</span>
+                        ? <span className={`font-bold ${!purityEvaluable(latest) ? 'text-slate-400' : latest.o2_purity_pct >= h.thresholds.o2_purity_warn ? 'text-green-400' : latest.o2_purity_pct >= h.thresholds.o2_purity_critical ? 'text-amber-400' : 'text-red-400'}`} title={generatorStatusText(latest) ?? undefined}>{latest.o2_purity_pct.toFixed(1)}%</span>
                         : <span className="text-slate-600">—</span>}
                     </div>
                     <div>
@@ -123,7 +124,7 @@ export default function AdminOverview() {
                         <td className="px-4 py-3"><p className="font-semibold text-slate-200">{h.nombre}</p><p className="text-[10px] text-slate-500">{h.direccion}</p></td>
                         <td className="px-4 py-3 text-slate-400">{h.ciudad}</td>
                         <td className="px-4 py-3"><span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${h.activo ? 'bg-green-500/20 text-green-400' : 'bg-slate-700 text-slate-500'}`}>{h.activo ? 'Activo' : 'Inactivo'}</span></td>
-                        <td className="px-4 py-3">{latest ? <span className={`font-bold ${latest.o2_purity_pct >= h.thresholds.o2_purity_warn ? 'text-green-400' : latest.o2_purity_pct >= h.thresholds.o2_purity_critical ? 'text-amber-400' : 'text-red-400 animate-pulse'}`}>{latest.o2_purity_pct.toFixed(1)}%</span> : <span className="text-slate-600">—</span>}</td>
+                        <td className="px-4 py-3">{latest ? <span className={`font-bold ${!purityEvaluable(latest) ? 'text-slate-400' : latest.o2_purity_pct >= h.thresholds.o2_purity_warn ? 'text-green-400' : latest.o2_purity_pct >= h.thresholds.o2_purity_critical ? 'text-amber-400' : 'text-red-400 animate-pulse'}`} title={generatorStatusText(latest) ?? undefined}>{latest.o2_purity_pct.toFixed(1)}%</span> : <span className="text-slate-600">—</span>}</td>
                         <td className="px-4 py-3">{alerts > 0 ? <span className="text-red-400 font-bold animate-pulse">{alerts} ⚠</span> : <span className="text-slate-600">—</span>}</td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">

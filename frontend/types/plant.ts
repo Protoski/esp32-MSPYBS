@@ -18,6 +18,27 @@ export interface PlantRow {
   air_dewpoint_c:        number;
   vacuum_pump_status:    DeviceStatus;
   vacuum_level_mmhg:     number;
+  // Datos del PLC BOGE (null en equipos sin PLC o filas antiguas)
+  plc_online?:                  boolean | null;
+  plc_plant_state?:             number | null;  // 1 = generador funcionando
+  plc_plant_state_label?:       string | null;
+  plc_o2_content_pct?:          number | null;
+  plc_gas_flow_nm3h?:           number | null;
+  plc_gas_pressure_barg?:       number | null;
+  plc_air_inlet_pressure_barg?: number | null;
+  plc_gas_temp_c?:              number | null;
+  plc_air_inlet_temp_c?:        number | null;
+  plc_gas_dewpoint_c?:          number | null;
+  plc_air_inlet_dewpoint_c?:    number | null;
+  plc_service_hours_total?:     number | null;
+  plc_service_hours_partial?:   number | null;
+  plc_flow_total_nm3?:          number | null;
+  plc_flow_partial_nm3?:        number | null;
+  plc_alarms?:                  number | null;
+  plc_faults?:                  number | null;
+  plc_alarms_ack?:              number[] | null;
+  plc_valves?:                  number[] | null;
+  plc_life_bit?:                number | null;
 }
 
 export interface HospitalThresholds {

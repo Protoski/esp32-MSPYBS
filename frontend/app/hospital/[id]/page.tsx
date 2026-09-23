@@ -10,6 +10,7 @@ import StatusBar from '@/components/StatusBar';
 import GaugeChart from '@/components/GaugeChart';
 import AlertBanner from '@/components/AlertBanner';
 import { fetchPlantData, fetchHospitals } from '@/lib/api';
+import { purityEvaluable, generatorStatusText } from '@/lib/plc';
 import { usePolling } from '@/hooks/usePolling';
 import type { PlantRow, Hospital } from '@/types/plant';
 
@@ -61,6 +62,9 @@ export default function HospitalDashboard() {
   const last50 = isOnline ? rows.slice(-50) : [];
   const labels = last50.map(r => fmt(r.timestamp));
   const th = hospital?.thresholds;
+  const purityStatus = latest && purityEvaluable(latest)
+    ? o2PurityStatus(latest.o2_purity_pct, th?.o2_purity_warn, th?.o2_purity_critical)
+    : 'neutral';
 
   return (
     <div className="space-y-5">
@@ -83,7 +87,7 @@ export default function HospitalDashboard() {
       <Section icon="⚗️" title="Planta PSA — Oxígeno Medicinal">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
           <GaugeChart value={latest?.o2_purity_pct ?? 0} min={80} max={100} label="Pureza O₂" unit="% O₂"
-            status={latest ? o2PurityStatus(latest.o2_purity_pct, th?.o2_purity_warn, th?.o2_purity_critical) : 'neutral'}
+            status={purityStatus}
             marks={[{ value: th?.o2_purity_warn ?? 93, color: '#f59e0b' }, { value: th?.o2_purity_critical ?? 90, color: '#ef4444' }]} />
           <GaugeChart value={latest?.tower_a_pressure_bar ?? 0} min={0} max={7} label="Torre A PSA" unit="bar" status={latest ? rangeStatus(latest.tower_a_pressure_bar, 0.2, 6) : 'neutral'} />
           <GaugeChart value={latest?.tower_b_pressure_bar ?? 0} min={0} max={7} label="Torre B PSA" unit="bar" status={latest ? rangeStatus(latest.tower_b_pressure_bar, 0.2, 6) : 'neutral'} />
@@ -91,8 +95,8 @@ export default function HospitalDashboard() {
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3 mb-4">
           <KPICard label="Pureza O₂" value={n(latest?.o2_purity_pct)} unit="% O₂"
-            status={latest ? o2PurityStatus(latest.o2_purity_pct, th?.o2_purity_warn, th?.o2_purity_critical) : 'neutral'}
-            sublabel={latest && latest.o2_purity_pct < (th?.o2_purity_critical ?? 90) ? '🚨 ALARMA GRAVE' : latest && latest.o2_purity_pct < (th?.o2_purity_warn ?? 93) ? '⚠ Bajo umbral' : 'Normal (≥93%)'}
+            status={purityStatus}
+            sublabel={latest && !purityEvaluable(latest) ? (generatorStatusText(latest) ?? '') : latest && latest.o2_purity_pct < (th?.o2_purity_critical ?? 90) ? '🚨 ALARMA GRAVE' : latest && latest.o2_purity_pct < (th?.o2_purity_warn ?? 93) ? '⚠ Bajo umbral' : 'Normal (≥93%)'}
             trend={rows.length > 2 ? (rows[rows.length-1].o2_purity_pct > rows[rows.length-2].o2_purity_pct ? 'up' : 'down') : 'stable'} />
           <KPICard label="Caudal O₂" value={n(latest?.o2_flow_m3h)} unit="m³/h" status={latest ? rangeStatus(latest.o2_flow_m3h, 2, 5, 1, 6) : 'neutral'} />
           <KPICard label="Presión Torre A" value={n(latest?.tower_a_pressure_bar)} unit="bar" status={latest ? rangeStatus(latest.tower_a_pressure_bar, 0.2, 6) : 'neutral'} sublabel="Ciclo PSA" />

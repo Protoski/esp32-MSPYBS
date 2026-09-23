@@ -4,12 +4,13 @@ import React from 'react';
 import Link from 'next/link';
 import type { HospitalSummary } from '@/types/plant';
 import { o2PurityStatus } from './KPICard';
+import { purityEvaluable } from '@/lib/plc';
 
 export default function HospitalCard({ summary }: { summary: HospitalSummary }) {
   const { hospital, isOnline, activeAlerts } = summary;
   // Sin señal → no mostrar valores del último registro
   const latest = isOnline ? summary.latest : null;
-  const purityStatus = latest ? o2PurityStatus(latest.o2_purity_pct, hospital.thresholds.o2_purity_warn, hospital.thresholds.o2_purity_critical) : 'neutral';
+  const purityStatus = latest && purityEvaluable(latest) ? o2PurityStatus(latest.o2_purity_pct, hospital.thresholds.o2_purity_warn, hospital.thresholds.o2_purity_critical) : 'neutral';
 
   return (
     <Link href={`/hospital/${hospital.id}`} className="block group">
