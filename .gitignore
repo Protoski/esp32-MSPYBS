@@ -26,3 +26,7 @@ Thumbs.db
 
 # Cache
 .eslintcache
+__pycache__/
+*.pyc
+hardware/kicad/erc_report.json
+.vercel

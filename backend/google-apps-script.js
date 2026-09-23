@@ -1,6 +1,6 @@
 /**
  * SISTEMA DE MONITOREO — PLANTA DE GASES MEDICINALES
- * Google Apps Script v2.1.0 — Multi-hospital
+ * Google Apps Script v2.1.0 — Multi-hospital + ubicación en mapa
  *
  * HOJAS REQUERIDAS: "Registros" y "Hospitales" (ejecutar initAll() una vez)
  */
@@ -8,7 +8,23 @@
 const SHEET_ID = 'REEMPLAZAR_CON_TU_SHEET_ID';
 const SH_DATA  = 'Registros';
 const SH_HOSP  = 'Hospitales';
-const MAX_ROWS = 100;
+const MAX_ROWS = 500;    // registros maximos a devolver en una consulta de historial
+const SCAN_ROWS = 20000; // filas a escanear hacia atras para encontrar los de un hospital
+
+// ── AUTENTICACION ───────────────────────────────────────────
+// Los valores reales viven en Extensiones > Propiedades del script >
+// Propiedades del script (Project Settings > Script Properties), NUNCA
+// en este archivo, para poder tenerlo en un repo publico sin exponerlos.
+// DEVICE_TOKEN: lo manda cada ESP32 junto con sus lecturas (action=data).
+// ADMIN_TOKEN: lo manda el panel de administracion del frontend.
+function deviceToken_() { return PropertiesService.getScriptProperties().getProperty('DEVICE_TOKEN'); }
+function adminToken_()  { return PropertiesService.getScriptProperties().getProperty('ADMIN_TOKEN'); }
+
+function checkToken_(body, expected) {
+  if (!expected) return err_('Servidor mal configurado: falta el token en Script Properties.');
+  if (body.token !== expected) return err_('No autorizado.');
+  return null; // null = token correcto, seguir adelante
+}
 
 function ok_(data)  { return out_(Object.assign({ ok: true  }, data)); }
 function err_(msg)  { return out_({ ok: false, error: msg }); }
@@ -28,11 +44,28 @@ function doPost(e) {
   try {
     const body   = JSON.parse((e.postData && e.postData.contents) || '{}');
     const action = body.action || 'data';
-    if (action === 'data')            return postData_(body);
-    if (action === 'add_hospital')    return addHospital_(body);
-    if (action === 'update_hospital') return updateHospital_(body);
-    if (action === 'toggle_hospital') return toggleHospital_(body);
-    if (action === 'delete_hospital') return deleteHospital_(body);
+
+    if (action === 'data') {
+      const authErr = checkToken_(body, deviceToken_());
+      if (authErr) return authErr;
+      return postData_(body);
+    }
+
+    if (action === 'verify_token') {
+      const authErr = checkToken_(body, adminToken_());
+      return authErr || ok_({ message: 'Token valido.' });
+    }
+
+    const adminActions = ['add_hospital', 'update_hospital', 'toggle_hospital', 'delete_hospital'];
+    if (adminActions.indexOf(action) !== -1) {
+      const authErr = checkToken_(body, adminToken_());
+      if (authErr) return authErr;
+      if (action === 'add_hospital')    return addHospital_(body);
+      if (action === 'update_hospital') return updateHospital_(body);
+      if (action === 'toggle_hospital') return toggleHospital_(body);
+      if (action === 'delete_hospital') return deleteHospital_(body);
+    }
+
     return err_('Acción desconocida: ' + action);
   } catch(ex) { Logger.log('doPost ERROR: ' + ex.message); return err_(ex.message); }
 }
@@ -59,7 +92,9 @@ function getData_(hospitalId) {
   if (!sheet) return ok_({ count: 0, rows: [], now: new Date().toISOString() });
   var last = sheet.getLastRow();
   if (last < 2) return ok_({ count: 0, rows: [], now: new Date().toISOString() });
-  var start = Math.max(2, last - 500 + 1);
+  // Escanea muchas filas hacia atras para encontrar registros aunque el
+  // equipo lleve tiempo sin enviar (sus filas quedan empujadas hacia arriba).
+  var start = Math.max(2, last - SCAN_ROWS + 1);
   var vals  = sheet.getRange(start, 1, last - start + 1, 14).getValues();
   var rows  = vals.filter(function(r) { return !hospitalId || r[1] === hospitalId; }).slice(-MAX_ROWS).map(rowToObj_);
   return ok_({ count: rows.length, rows: rows, now: new Date().toISOString() });
@@ -70,7 +105,7 @@ function getLatestAll_() {
   if (!sheet) return ok_({ count: 0, rows: [], now: new Date().toISOString() });
   var last = sheet.getLastRow();
   if (last < 2) return ok_({ count: 0, rows: [], now: new Date().toISOString() });
-  var start = Math.max(2, last - 1000 + 1);
+  var start = Math.max(2, last - SCAN_ROWS + 1);
   var vals  = sheet.getRange(start, 1, last - start + 1, 14).getValues();
   var map   = {};
   vals.forEach(function(r) { if (r[1]) map[r[1]] = rowToObj_(r); });
@@ -96,14 +131,18 @@ function getHospitals_() {
   if (!sheet) return ok_({ hospitals: [] });
   var last = sheet.getLastRow();
   if (last < 2) return ok_({ hospitals: [] });
-  var vals = sheet.getRange(2, 1, last - 1, 12).getValues();
+  var vals = sheet.getRange(2, 1, last - 1, 14).getValues();
   return ok_({ hospitals: vals.filter(function(r) { return r[0]; }).map(hospRowToObj_) });
 }
 
 function addHospital_(body) {
   var sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName(SH_HOSP);
   if (!sheet) return err_('Hoja ' + SH_HOSP + ' no encontrada.');
-  var id = Utilities.getUuid();
+  // Permite fijar un id externo (ej. el UUID que ya usa el sistema ESP32/
+  // sensorMspbsId en SIGGAM) para que ambos sistemas identifiquen al mismo
+  // hospital con el mismo id. Si no se pasa, se genera uno como antes.
+  var id = body.id || Utilities.getUuid();
+  if (findHospitalRow_(sheet, id)) return err_('Ya existe un hospital con ese id: ' + id);
   var th = body.thresholds || {}, eq = body.equipment || {};
   sheet.appendRow([
     id, body.nombre||'', body.ciudad||'', body.direccion||'', body.activo !== false,
@@ -111,6 +150,7 @@ function addHospital_(body) {
     th.air_pressure_max||5.5, th.vacuum_min_mmhg||-400,
     JSON.stringify({ compressor_enabled: eq.compressor_enabled !== false, vacuum_enabled: eq.vacuum_enabled !== false, psa_enabled: eq.psa_enabled !== false }),
     new Date().toISOString(),
+    body.lat !== undefined ? body.lat : '', body.lon !== undefined ? body.lon : '',
   ]);
   return ok_({ id: id, message: 'Hospital creado.' });
 }
@@ -133,6 +173,9 @@ function updateHospital_(body) {
       psa_enabled:        eq.psa_enabled        !== undefined ? eq.psa_enabled        : curEq.psa_enabled,
     }),
   ]]);
+  // Coordenadas opcionales (columnas 13 y 14)
+  if (body.lat !== undefined) sheet.getRange(row, 13).setValue(body.lat === null ? '' : body.lat);
+  if (body.lon !== undefined) sheet.getRange(row, 14).setValue(body.lon === null ? '' : body.lon);
   return ok_({ message: 'Hospital actualizado.' });
 }
 
@@ -169,6 +212,8 @@ function hospRowToObj_(r) {
     activo: r[4] === true || r[4] === 'TRUE',
     thresholds: { o2_purity_warn: Number(r[5])||93, o2_purity_critical: Number(r[6])||90, air_pressure_min: Number(r[7])||4.5, air_pressure_max: Number(r[8])||5.5, vacuum_min_mmhg: Number(r[9])||-400 },
     equipment: equipment, created_at: r[11]||'',
+    lat: (r[12] !== '' && r[12] !== undefined && r[12] !== null) ? Number(r[12]) : null,
+    lon: (r[13] !== '' && r[13] !== undefined && r[13] !== null) ? Number(r[13]) : null,
   };
 }
 
@@ -177,7 +222,7 @@ function initAll() {
   var d  = ss.getSheetByName(SH_DATA) || ss.insertSheet(SH_DATA);
   var h  = ss.getSheetByName(SH_HOSP) || ss.insertSheet(SH_HOSP);
   styleHeaders_(d, ['Timestamp','hospital_id','Caudal_O2_m3h','Presion_Torre_A_bar','Presion_Torre_B_bar','Presion_Tanque_O2_bar','Pureza_O2_pct','DewPoint_PSA_C','Estado_Compresor','Horas_Compresor','Presion_Linea_Aire_bar','DewPoint_Aire_C','Estado_Bomba_Vacio','Nivel_Vacio_mmHg']);
-  styleHeaders_(h, ['id','nombre','ciudad','direccion','activo','o2_purity_warn','o2_purity_critical','air_pressure_min','air_pressure_max','vacuum_min_mmhg','equipment_json','created_at']);
+  styleHeaders_(h, ['id','nombre','ciudad','direccion','activo','o2_purity_warn','o2_purity_critical','air_pressure_min','air_pressure_max','vacuum_min_mmhg','equipment_json','created_at','lat','lon']);
   Logger.log('✅ Hojas inicializadas.');
 }
 

@@ -29,6 +29,7 @@ esp32-MSPYBS/
 │   └── google-apps-script.js   # Código para pegar en script.google.com
 ├── esp32/
 │   └── plant_monitor.ino       # Firmware Arduino para ESP32
+├── mcp-server/                 # Servidor MCP: consulta estado en línea/fuera de línea
 ├── frontend/                   # Aplicación Next.js
 │   ├── app/
 │   │   ├── layout.tsx
@@ -161,6 +162,14 @@ npm run dev
 ```
 
 ---
+
+## Servidor MCP — Consultar estado de plantas
+
+`mcp-server/` expone un servidor MCP (Model Context Protocol) para que
+cualquier usuario, desde un cliente compatible (ej. Claude Desktop), pueda
+preguntar si una planta está en línea o sin señal, usando los mismos datos
+del Google Sheet. Ver `mcp-server/README.md` para instalación y
+configuración.
 
 ## Normativas de Referencia
 

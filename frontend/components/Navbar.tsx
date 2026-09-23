@@ -7,8 +7,10 @@ import { usePathname } from 'next/navigation';
 export default function Navbar() {
   const path = usePathname();
   const links = [
-    { href: '/',      label: 'Dashboard',   icon: '⚡' },
-    { href: '/admin', label: 'Administrar', icon: '⚙️' },
+    { href: '/',         label: 'Dashboard',   icon: '⚡' },
+    { href: '/mapa',     label: 'Mapa',        icon: '🗺' },
+    { href: '/informes', label: 'Informes',    icon: '📊' },
+    { href: '/admin',    label: 'Administrar', icon: '⚙️' },
   ];
   return (
     <nav className="sticky top-0 z-50 border-b border-slate-800 bg-slate-900/80 backdrop-blur-md">

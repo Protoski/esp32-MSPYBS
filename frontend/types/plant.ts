@@ -43,6 +43,8 @@ export interface Hospital {
   thresholds:   HospitalThresholds;
   equipment:    HospitalEquipment;
   created_at:   string;
+  lat?:         number | null; // ubicación personalizada en el mapa (fijada por el admin)
+  lon?:         number | null;
 }
 
 export interface ApiDataResponse {

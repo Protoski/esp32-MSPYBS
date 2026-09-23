@@ -71,8 +71,8 @@ export default function HistorialPage() {
       data = data.filter(r => Object.values(r).some(v => String(v ?? '').toLowerCase().includes(q)));
     }
     data.sort((a, b) => {
-      const av = (a as Record<string, unknown>)[sortCol] ?? '';
-      const bv = (b as Record<string, unknown>)[sortCol] ?? '';
+      const av = (a as unknown as Record<string, unknown>)[sortCol] ?? '';
+      const bv = (b as unknown as Record<string, unknown>)[sortCol] ?? '';
       const cmp = String(av).localeCompare(String(bv), undefined, { numeric: true });
       return sortAsc ? cmp : -cmp;
     });
@@ -91,7 +91,7 @@ export default function HistorialPage() {
     const header = COLS.map(c => c.label).join(',');
     const csvRows = filtered.map(r =>
       COLS.map(c => {
-        const val = (r as Record<string, unknown>)[c.key];
+        const val = (r as unknown as Record<string, unknown>)[c.key];
         const s = c.fmt(val);
         return `"${s.replace(/"/g, '""')}"`;
       }).join(',')
@@ -195,7 +195,7 @@ export default function HistorialPage() {
                 {paginated.map((r, i) => (
                   <tr key={i} className="bg-slate-900/50 hover:bg-slate-800/40 transition-colors">
                     {COLS.map(c => {
-                      const val = (r as Record<string, unknown>)[c.key];
+                      const val = (r as unknown as Record<string, unknown>)[c.key];
                       const display = c.fmt(val);
                       const isStatus = c.key.includes('status');
                       const color = isStatus

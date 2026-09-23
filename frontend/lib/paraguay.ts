@@ -1,0 +1,109 @@
+// Paraguay department zones and city coordinates
+
+export interface CityCoords {
+  lat: number;
+  lon: number;
+  departamento: string;
+  zona: string;
+}
+
+// Coordinates for Paraguayan cities/towns (approximate center)
+export const CITY_COORDS: Record<string, CityCoords> = {
+  'asunción':            { lat: -25.2867, lon: -57.6470, departamento: 'Capital',       zona: 'Central' },
+  'asuncion':            { lat: -25.2867, lon: -57.6470, departamento: 'Capital',       zona: 'Central' },
+  'lambaré':             { lat: -25.3500, lon: -57.6167, departamento: 'Central',       zona: 'Central' },
+  'lambare':             { lat: -25.3500, lon: -57.6167, departamento: 'Central',       zona: 'Central' },
+  'fernando de la mora': { lat: -25.3333, lon: -57.5667, departamento: 'Central',       zona: 'Central' },
+  'luque':               { lat: -25.2667, lon: -57.4833, departamento: 'Central',       zona: 'Central' },
+  'capiatá':             { lat: -25.3500, lon: -57.4500, departamento: 'Central',       zona: 'Central' },
+  'capiata':             { lat: -25.3500, lon: -57.4500, departamento: 'Central',       zona: 'Central' },
+  'san lorenzo':         { lat: -25.3333, lon: -57.5167, departamento: 'Central',       zona: 'Central' },
+  'mariano roque alonso':{ lat: -25.1833, lon: -57.5333, departamento: 'Central',       zona: 'Central' },
+  'ñemby':               { lat: -25.3833, lon: -57.5833, departamento: 'Central',       zona: 'Central' },
+  'nemby':               { lat: -25.3833, lon: -57.5833, departamento: 'Central',       zona: 'Central' },
+  'itauguá':             { lat: -25.3833, lon: -57.3500, departamento: 'Central',       zona: 'Central' },
+  'itaugua':             { lat: -25.3833, lon: -57.3500, departamento: 'Central',       zona: 'Central' },
+  'guarambaré':          { lat: -25.4667, lon: -57.4500, departamento: 'Central',       zona: 'Central' },
+  'guarambare':          { lat: -25.4667, lon: -57.4500, departamento: 'Central',       zona: 'Central' },
+  'villeta':             { lat: -25.5167, lon: -57.5667, departamento: 'Central',       zona: 'Central' },
+  'caacupé':             { lat: -25.3833, lon: -57.1667, departamento: 'Cordillera',    zona: 'Cordillera' },
+  'caacupe':             { lat: -25.3833, lon: -57.1667, departamento: 'Cordillera',    zona: 'Cordillera' },
+  'coronel oviedo':      { lat: -25.4500, lon: -56.4333, departamento: 'Caaguazú',      zona: 'Oriente Norte' },
+  'caaguazú':            { lat: -25.4500, lon: -56.0167, departamento: 'Caaguazú',      zona: 'Oriente Norte' },
+  'caaguazu':            { lat: -25.4500, lon: -56.0167, departamento: 'Caaguazú',      zona: 'Oriente Norte' },
+  'villarrica':          { lat: -25.7500, lon: -56.4333, departamento: 'Guairá',        zona: 'Oriente Sur' },
+  'encarnación':         { lat: -27.3306, lon: -55.8667, departamento: 'Itapúa',        zona: 'Sur' },
+  'encarnacion':         { lat: -27.3306, lon: -55.8667, departamento: 'Itapúa',        zona: 'Sur' },
+  'ciudad del este':     { lat: -25.5167, lon: -54.6167, departamento: 'Alto Paraná',   zona: 'Este' },
+  'hernandarias':        { lat: -25.4000, lon: -54.6167, departamento: 'Alto Paraná',   zona: 'Este' },
+  'presidente franco':   { lat: -25.5500, lon: -54.6167, departamento: 'Alto Paraná',   zona: 'Este' },
+  'concepción':          { lat: -23.4000, lon: -57.4333, departamento: 'Concepción',    zona: 'Norte' },
+  'concepcion':          { lat: -23.4000, lon: -57.4333, departamento: 'Concepción',    zona: 'Norte' },
+  'pedro juan caballero':{ lat: -22.5500, lon: -55.7333, departamento: 'Amambay',       zona: 'Norte' },
+  'san estanislao':      { lat: -24.6500, lon: -56.4333, departamento: 'San Pedro',     zona: 'Norte' },
+  'san pedro':           { lat: -24.1167, lon: -56.9833, departamento: 'San Pedro',     zona: 'Norte' },
+  'paraguarí':           { lat: -25.6333, lon: -57.1500, departamento: 'Paraguarí',     zona: 'Central' },
+  'paraguari':           { lat: -25.6333, lon: -57.1500, departamento: 'Paraguarí',     zona: 'Central' },
+  'pilar':               { lat: -26.8500, lon: -58.3000, departamento: 'Ñeembucú',      zona: 'Sur' },
+  'filadelfia':          { lat: -22.3500, lon: -60.0333, departamento: 'Boquerón',      zona: 'Chaco' },
+  'mariscal estigarribia':{ lat: -22.0333, lon: -60.6167, departamento: 'Boquerón',    zona: 'Chaco' },
+  'pozo colorado':       { lat: -23.4833, lon: -58.7833, departamento: 'Presidente Hayes', zona: 'Chaco' },
+};
+
+export const ZONES = ['Central', 'Cordillera', 'Oriente Norte', 'Oriente Sur', 'Este', 'Norte', 'Sur', 'Chaco'];
+
+export const ZONE_COLORS: Record<string, string> = {
+  'Central':       '#38bdf8',
+  'Cordillera':    '#a78bfa',
+  'Oriente Norte': '#34d399',
+  'Oriente Sur':   '#4ade80',
+  'Este':          '#fb923c',
+  'Norte':         '#f472b6',
+  'Sur':           '#facc15',
+  'Chaco':         '#94a3b8',
+  'Desconocido':   '#475569',
+};
+
+export function getCityCoords(ciudad: string): CityCoords | null {
+  if (!ciudad) return null;
+  const key = ciudad.toLowerCase().trim();
+  return CITY_COORDS[key] ?? null;
+}
+
+export function getZone(ciudad: string): string {
+  const coords = getCityCoords(ciudad);
+  return coords?.zona ?? 'Desconocido';
+}
+
+// Coordenadas efectivas de un hospital: las fijadas por el admin tienen
+// prioridad; si no hay, se usa la posición conocida de la ciudad.
+export function getHospitalCoords(h: { ciudad: string; lat?: number | null; lon?: number | null }): { lat: number; lon: number; zona: string } | null {
+  const cityZone = getZone(h.ciudad);
+  if (typeof h.lat === 'number' && typeof h.lon === 'number' && !isNaN(h.lat) && !isNaN(h.lon)) {
+    return { lat: h.lat, lon: h.lon, zona: cityZone };
+  }
+  const city = getCityCoords(h.ciudad);
+  return city ? { lat: city.lat, lon: city.lon, zona: city.zona } : null;
+}
+
+// Separa marcadores que caen exactamente en el mismo punto (varios
+// hospitales en la misma ciudad) distribuyéndolos en círculo alrededor
+// de la posición original para que no queden encimados.
+export function spreadOverlaps<T extends { lat: number; lon: number }>(items: T[]): T[] {
+  const groups: Record<string, number[]> = {};
+  items.forEach((m, i) => {
+    const key = `${m.lat.toFixed(3)},${m.lon.toFixed(3)}`;
+    (groups[key] ??= []).push(i);
+  });
+  const out = items.map(m => ({ ...m }));
+  Object.values(groups).forEach(idxs => {
+    if (idxs.length < 2) return;
+    const radius = 0.05; // ~5 km
+    idxs.forEach((idx, k) => {
+      const angle = (2 * Math.PI * k) / idxs.length - Math.PI / 2;
+      out[idx].lat += radius * Math.sin(angle);
+      out[idx].lon += radius * Math.cos(angle);
+    });
+  });
+  return out;
+}
