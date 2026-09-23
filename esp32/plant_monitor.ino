@@ -30,11 +30,10 @@
 #include <EthernetENC.h>
 #include <ArduinoJson.h>
 
-// WIFI_SSID y WIFI_PASSWORD: crea secrets.h a partir de secrets.example.h
+// WIFI_SSID, WIFI_PASSWORD, API_URL y DEVICE_TOKEN: crea secrets.h a partir
+// de secrets.example.h (no se sube al repositorio)
 #include "secrets.h"
 
-// ── BACKEND ─────────────────────────────────────────────────
-const char* API_URL     = "https://script.google.com/macros/s/AKfycby0PXjgE7OZu17b162eEKmWzk0J6px7W4fBaiIZbzZ43eXq12_7NUfOlQ46drYPidcn/exec";
 const char* HOSPITAL_ID = "247957b8-c92e-44f7-8858-819515a14731";
 
 const unsigned long SEND_INTERVAL_MS = 5000;
@@ -282,6 +281,7 @@ void sendData(const DatosPLC& d) {
   StaticJsonDocument<512> doc;
 
   doc["action"]               = "data";
+  doc["token"]                = DEVICE_TOKEN;
   doc["hospital_id"]          = HOSPITAL_ID;
   doc["o2_purity_pct"]        = d.o2Pct;
   doc["o2_flow_m3h"]          = d.caudal;

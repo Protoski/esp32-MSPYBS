@@ -29,6 +29,7 @@ esp32-MSPYBS/
 │   └── google-apps-script.js   # Código para pegar en script.google.com
 ├── esp32/
 │   └── plant_monitor.ino       # Firmware Arduino para ESP32
+├── mcp-server/                 # Servidor MCP: consulta estado en línea/fuera de línea
 ├── frontend/                   # Aplicación Next.js
 │   ├── app/
 │   │   ├── layout.tsx
@@ -127,16 +128,17 @@ git push origin main
 
 ### Paso 5: Configurar el ESP32
 
-1. Copia `esp32/secrets.example.h` como `esp32/secrets.h` y pon el nombre y la contraseña
-   de tu red Wi-Fi. `secrets.h` está en `.gitignore` y no se sube al repositorio.
-2. Abre `esp32/plant_monitor.ino` en Arduino IDE (con `secrets.h` en la misma carpeta) y
-   comprueba que `API_URL` apunta a tu implementación de Apps Script.
-3. El firmware lee el PLC S7-1200 del generador BOGE por Modbus TCP a través de un módulo
+1. Copia `esp32/secrets.example.h` como `esp32/secrets.h` y completa: red Wi-Fi,
+   `API_URL` (el mismo valor que `NEXT_PUBLIC_API_URL` en Vercel) y `DEVICE_TOKEN`
+   (Apps Script → Configuración del proyecto → Propiedades del script). `secrets.h` está en
+   `.gitignore` y no se sube al repositorio.
+2. El firmware lee el PLC S7-1200 del generador BOGE por Modbus TCP a través de un módulo
    ENC28J60 (IP del ESP32 en la LAN: `100.100.200.50`; PLC: `100.100.200.10:501`) y envía
-   los datos por WiFi. Requiere la librería **EthernetENC**.
-3. Instala las librerías desde el Gestor de Librerías:
-   - `ArduinoJson` ≥ 6.x (Benoit Blanchon)
-4. Selecciona la placa **ESP32 Dev Module** y sube el firmware.
+   los datos por WiFi.
+3. Instala las librerías desde el Gestor de Librerías: **EthernetENC** (Juraj Andrassy) y
+   **ArduinoJson** ≥ 6.x (Benoit Blanchon).
+4. Abre `plant_monitor.ino` (con `secrets.h` en la misma carpeta), selecciona la placa
+   **ESP32 Dev Module** y sube el firmware.
 
 ---
 
@@ -163,6 +165,14 @@ npm run dev
 ```
 
 ---
+
+## Servidor MCP — Consultar estado de plantas
+
+`mcp-server/` expone un servidor MCP (Model Context Protocol) para que
+cualquier usuario, desde un cliente compatible (ej. Claude Desktop), pueda
+preguntar si una planta está en línea o sin señal, usando los mismos datos
+del Google Sheet. Ver `mcp-server/README.md` para instalación y
+configuración.
 
 ## Normativas de Referencia
 

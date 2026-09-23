@@ -1,0 +1,15 @@
+{
+  "board": {
+    "design_settings": {}
+  },
+  "meta": {
+    "filename": "plant_monitor.kicad_pro",
+    "version": 1
+  },
+  "sheets": [
+    [
+      "919ce5fe-df97-4b08-bd4a-9988adf32cfa",
+      "Root"
+    ]
+  ]
+}

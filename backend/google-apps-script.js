@@ -11,6 +11,21 @@ const SH_HOSP  = 'Hospitales';
 const MAX_ROWS = 500;    // registros maximos a devolver en una consulta de historial
 const SCAN_ROWS = 20000; // filas a escanear hacia atras para encontrar los de un hospital
 
+// ── AUTENTICACION ───────────────────────────────────────────
+// Los valores reales viven en Extensiones > Propiedades del script >
+// Propiedades del script (Project Settings > Script Properties), NUNCA
+// en este archivo, para poder tenerlo en un repo publico sin exponerlos.
+// DEVICE_TOKEN: lo manda cada ESP32 junto con sus lecturas (action=data).
+// ADMIN_TOKEN: lo manda el panel de administracion del frontend.
+function deviceToken_() { return PropertiesService.getScriptProperties().getProperty('DEVICE_TOKEN'); }
+function adminToken_()  { return PropertiesService.getScriptProperties().getProperty('ADMIN_TOKEN'); }
+
+function checkToken_(body, expected) {
+  if (!expected) return err_('Servidor mal configurado: falta el token en Script Properties.');
+  if (body.token !== expected) return err_('No autorizado.');
+  return null; // null = token correcto, seguir adelante
+}
+
 function ok_(data)  { return out_(Object.assign({ ok: true  }, data)); }
 function err_(msg)  { return out_({ ok: false, error: msg }); }
 function out_(data) { return ContentService.createTextOutput(JSON.stringify(data)).setMimeType(ContentService.MimeType.JSON); }
@@ -29,11 +44,28 @@ function doPost(e) {
   try {
     const body   = JSON.parse((e.postData && e.postData.contents) || '{}');
     const action = body.action || 'data';
-    if (action === 'data')            return postData_(body);
-    if (action === 'add_hospital')    return addHospital_(body);
-    if (action === 'update_hospital') return updateHospital_(body);
-    if (action === 'toggle_hospital') return toggleHospital_(body);
-    if (action === 'delete_hospital') return deleteHospital_(body);
+
+    if (action === 'data') {
+      const authErr = checkToken_(body, deviceToken_());
+      if (authErr) return authErr;
+      return postData_(body);
+    }
+
+    if (action === 'verify_token') {
+      const authErr = checkToken_(body, adminToken_());
+      return authErr || ok_({ message: 'Token valido.' });
+    }
+
+    const adminActions = ['add_hospital', 'update_hospital', 'toggle_hospital', 'delete_hospital'];
+    if (adminActions.indexOf(action) !== -1) {
+      const authErr = checkToken_(body, adminToken_());
+      if (authErr) return authErr;
+      if (action === 'add_hospital')    return addHospital_(body);
+      if (action === 'update_hospital') return updateHospital_(body);
+      if (action === 'toggle_hospital') return toggleHospital_(body);
+      if (action === 'delete_hospital') return deleteHospital_(body);
+    }
+
     return err_('Acción desconocida: ' + action);
   } catch(ex) { Logger.log('doPost ERROR: ' + ex.message); return err_(ex.message); }
 }
@@ -65,16 +97,14 @@ function getData_(hospitalId) {
   var start = Math.max(2, last - SCAN_ROWS + 1);
   var vals  = sheet.getRange(start, 1, last - start + 1, 14).getValues();
   var rows  = vals.filter(function(r) { return !hospitalId || r[1] === hospitalId; }).slice(-MAX_ROWS).map(rowToObj_);
-  // 'now' = hora del servidor; el frontend compara contra ella (mismo reloj)
-  // para detectar conexion sin depender del reloj del navegador.
   return ok_({ count: rows.length, rows: rows, now: new Date().toISOString() });
 }
 
 function getLatestAll_() {
   var sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName(SH_DATA);
-  if (!sheet) return ok_({ count: 0, rows: [] });
+  if (!sheet) return ok_({ count: 0, rows: [], now: new Date().toISOString() });
   var last = sheet.getLastRow();
-  if (last < 2) return ok_({ count: 0, rows: [] });
+  if (last < 2) return ok_({ count: 0, rows: [], now: new Date().toISOString() });
   var start = Math.max(2, last - SCAN_ROWS + 1);
   var vals  = sheet.getRange(start, 1, last - start + 1, 14).getValues();
   var map   = {};
@@ -108,7 +138,11 @@ function getHospitals_() {
 function addHospital_(body) {
   var sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName(SH_HOSP);
   if (!sheet) return err_('Hoja ' + SH_HOSP + ' no encontrada.');
-  var id = Utilities.getUuid();
+  // Permite fijar un id externo (ej. el UUID que ya usa el sistema ESP32/
+  // sensorMspbsId en SIGGAM) para que ambos sistemas identifiquen al mismo
+  // hospital con el mismo id. Si no se pasa, se genera uno como antes.
+  var id = body.id || Utilities.getUuid();
+  if (findHospitalRow_(sheet, id)) return err_('Ya existe un hospital con ese id: ' + id);
   var th = body.thresholds || {}, eq = body.equipment || {};
   sheet.appendRow([
     id, body.nombre||'', body.ciudad||'', body.direccion||'', body.activo !== false,
@@ -194,5 +228,5 @@ function initAll() {
 
 function styleHeaders_(sheet, headers) {
   sheet.getRange(1,1,1,headers.length).setValues([headers]).setFontWeight('bold').setBackground('#0f172a').setFontColor('#38bdf8');
-  sheet.getRange(2,1,1000,1).setNumberFormat('yyyy-MM-dd HH:mm:ss');
+  sheet.getRange(2,1,1000,1).setNumberFormat('@STRING@');
 }

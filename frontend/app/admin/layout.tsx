@@ -3,26 +3,34 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-
-const ADMIN_PIN = process.env.NEXT_PUBLIC_ADMIN_PIN ?? '1234';
+import { verifyAdminToken } from '@/lib/api';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const [unlocked, setUnlocked] = useState(false);
   const [pin, setPin] = useState('');
   const [error, setError] = useState(false);
+  const [checking, setChecking] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const path = usePathname();
 
   useEffect(() => {
-    if (sessionStorage.getItem('admin_unlocked') === 'true') setUnlocked(true);
+    // El token ya se valido en una carga anterior de esta pestaña; se vuelve
+    // a chequear igual antes de cada mutacion (ver apiPost), esto solo evita
+    // pedir el PIN de nuevo en cada navegacion dentro de /admin.
+    if (sessionStorage.getItem('admin_token')) setUnlocked(true);
   }, []);
 
   // Cerrar menú al navegar
   useEffect(() => { setMenuOpen(false); }, [path]);
 
-  const handlePin = (e: React.FormEvent) => {
+  const handlePin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (pin === ADMIN_PIN) { sessionStorage.setItem('admin_unlocked', 'true'); setUnlocked(true); setError(false); }
+    setChecking(true);
+    // La verificacion real ocurre en el servidor -- este PIN nunca se
+    // compara contra nada en el codigo del cliente.
+    const valid = await verifyAdminToken(pin);
+    setChecking(false);
+    if (valid) { sessionStorage.setItem('admin_token', pin); setUnlocked(true); setError(false); }
     else { setError(true); setPin(''); }
   };
 
@@ -40,9 +48,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               className={`w-full rounded-xl border bg-slate-900 px-4 py-3 text-center text-xl font-black tracking-[0.5em] text-slate-100 outline-none focus:ring-2 transition-all ${
                 error ? 'border-red-500 focus:ring-red-500/30' : 'border-slate-600 focus:ring-sky-500/30 focus:border-sky-500'}`} />
             {error && <p className="text-xs text-red-400 text-center">PIN incorrecto</p>}
-            <button type="submit" className="w-full rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold py-3 transition-colors">Acceder</button>
+            <button type="submit" disabled={checking} className="w-full rounded-xl bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white font-bold py-3 transition-colors">
+              {checking ? 'Verificando...' : 'Acceder'}
+            </button>
           </form>
-          <p className="text-[10px] text-slate-600 text-center">PIN por defecto: 1234 — configura NEXT_PUBLIC_ADMIN_PIN en Vercel para cambiarlo.</p>
+          <p className="text-[10px] text-slate-600 text-center">El PIN se configura como ADMIN_TOKEN en las Propiedades del script del backend.</p>
         </div>
       </div>
     );
@@ -65,7 +75,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         ))}
       </nav>
       <div className="p-2 border-t border-slate-700">
-        <button onClick={() => { sessionStorage.removeItem('admin_unlocked'); setUnlocked(false); setMenuOpen(false); }}
+        <button onClick={() => { sessionStorage.removeItem('admin_token'); setUnlocked(false); setMenuOpen(false); }}
           className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all">
           🔒 Cerrar sesión
         </button>

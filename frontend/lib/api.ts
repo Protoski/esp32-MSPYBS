@@ -24,15 +24,32 @@ async function apiFetch<T>(params: Record<string, string>): Promise<T> {
 }
 
 async function apiPost<T>(body: Record<string, unknown>): Promise<T> {
+  // El token de administrador se adjunta aca, no se compara nunca en el
+  // cliente: la unica verificacion real ocurre en el backend.
+  const token = typeof window !== 'undefined' ? sessionStorage.getItem('admin_token') : null;
   // Content-Type text/plain evita el preflight CORS de Google Apps Script
   const res = await fetch(BASE, {
     method:   'POST',
     headers:  { 'Content-Type': 'text/plain;charset=utf-8' },
-    body:     JSON.stringify(body),
+    body:     JSON.stringify({ token, ...body }),
     redirect: 'follow',
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  const data = await res.json();
+  if (data.ok === false) throw new Error(data.error || 'Error desconocido');
+  return data;
+}
+
+export async function verifyAdminToken(token: string): Promise<boolean> {
+  const res = await fetch(BASE, {
+    method:   'POST',
+    headers:  { 'Content-Type': 'text/plain;charset=utf-8' },
+    body:     JSON.stringify({ action: 'verify_token', token }),
+    redirect: 'follow',
+  });
+  if (!res.ok) return false;
+  const data = await res.json();
+  return data.ok === true;
 }
 
 export async function fetchPlantData(hospitalId: string): Promise<ApiDataResponse> {
@@ -48,7 +65,7 @@ export async function fetchHospitals(): Promise<ApiHospitalsResponse> {
 }
 
 export async function createHospital(
-  data: Omit<Hospital, 'id' | 'created_at'>
+  data: Omit<Hospital, 'id' | 'created_at'> & { id?: string }
 ): Promise<ApiCommandResponse> {
   return apiPost<ApiCommandResponse>({ action: 'add_hospital', ...data });
 }
