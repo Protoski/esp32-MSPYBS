@@ -17,10 +17,20 @@ desplegado (`backend/google-apps-script.js`), consultando las acciones
 - **`list_plants_status`** — lista todas las plantas registradas con su
   estado actual.
 - **`create_hospital`** — da de alta un hospital (nombre, ciudad, dirección,
-  ubicación, umbrales de pureza O₂, equipos presentes y, opcionalmente, un
-  UUID externo como el `sensorMspbsId` de SIGGAM). Devuelve el ID, que es el
-  `HOSPITAL_ID` del firmware del ESP32. No crea nada si ya existe un hospital
-  con el mismo nombre o ID. Requiere `MSPYBS_ADMIN_TOKEN`.
+  ubicación, umbrales de pureza O₂ y equipos presentes). Devuelve el ID, que
+  es el `HOSPITAL_ID` del firmware del ESP32. No crea nada si ya existe un
+  hospital con el mismo nombre o ID. Requiere `MSPYBS_ADMIN_TOKEN`.
+
+### Compatibilidad con SIGGAM
+
+SIGGAM identifica cada planta por su `sensorMspbsId`, que debe ser igual al
+ID del hospital en este sistema:
+
+- **SIGGAM ya tiene el ID de la planta:** pásalo en `id`. Se guarda tal cual
+  (solo se recortan espacios), sin exigir formato UUID, porque SIGGAM compara
+  el texto exacto. Si no tiene formato UUID estándar, la herramienta lo avisa.
+- **SIGGAM todavía no lo tiene:** omite `id`. El backend genera un UUID y la
+  respuesta indica que hay que cargarlo en SIGGAM como `sensorMspbsId`.
 
 Una planta se considera **en línea** si su último dato llegó hace menos de
 60 segundos (mismo criterio que usa el frontend Next.js).

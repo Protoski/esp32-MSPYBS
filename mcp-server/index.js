@@ -24,6 +24,7 @@ const ADMIN_TOKEN = process.env.MSPYBS_ADMIN_TOKEN;
 // Una planta se considera "en línea" si su último dato llegó hace menos de
 // esto (coincide con el criterio usado en el frontend: frontend/app/page.tsx).
 const ONLINE_THRESHOLD_MS = 60_000;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 if (!API_URL) {
   console.error(
@@ -195,17 +196,22 @@ server.registerTool(
     description:
       "Da de alta un hospital/planta nuevo en el sistema (hoja Hospitales). " +
       "Devuelve el ID asignado, que es el HOSPITAL_ID que debe usar el ESP32 " +
-      "de esa planta. Requiere MSPYBS_ADMIN_TOKEN configurado en el servidor MCP.",
+      "de esa planta. Para compatibilidad con SIGGAM, el ID debe ser el mismo que " +
+      "SIGGAM usa como sensorMspbsId: pregunta al usuario si SIGGAM ya tiene uno " +
+      "asignado antes de crear. Requiere MSPYBS_ADMIN_TOKEN configurado en el servidor MCP.",
     inputSchema: {
       nombre: z.string().min(1).describe("Nombre del hospital."),
       ciudad: z.string().optional().describe("Ciudad."),
       direccion: z.string().optional().describe("Dirección."),
       id: z
         .string()
-        .uuid()
+        .trim()
+        .min(1)
         .optional()
         .describe(
-          "UUID externo a reutilizar (ej. sensorMspbsId de SIGGAM). Si se omite, el backend genera uno."
+          "sensorMspbsId que SIGGAM ya tiene asignado a esta planta, copiado exactamente " +
+            "(se guarda tal cual, sin validar formato). Si SIGGAM aún no la tiene, omítelo: " +
+            "el backend genera un UUID que luego hay que cargar en SIGGAM."
         ),
       lat: z.number().min(-90).max(90).optional().describe("Latitud para el mapa."),
       lon: z.number().min(-180).max(180).optional().describe("Longitud para el mapa."),
@@ -271,17 +277,26 @@ server.registerTool(
     if (args.lon !== undefined) body.lon = args.lon;
 
     const res = await apiPost(body);
-    return {
-      content: [
-        {
-          type: "text",
-          text:
-            `Hospital creado: ${body.nombre} (${body.ciudad || "sin ciudad"}).\n` +
-            `ID: ${res.id}\n` +
-            `Usa este ID como HOSPITAL_ID en el firmware del ESP32 de esta planta.`,
-        },
-      ],
-    };
+    const lines = [
+      `Hospital creado: ${body.nombre} (${body.ciudad || "sin ciudad"}).`,
+      `ID: ${res.id}`,
+      `Usa este ID como HOSPITAL_ID en el firmware del ESP32 de esta planta.`,
+    ];
+    if (args.id) {
+      lines.push("SIGGAM: se usó el sensorMspbsId indicado, ambos sistemas comparten el mismo ID.");
+      if (!UUID_RE.test(args.id)) {
+        lines.push(
+          "Aviso: ese ID no tiene formato UUID estándar (8-4-4-4-12). Se guardó tal cual; " +
+            "confirma con SIGGAM que está copiado completo."
+        );
+      }
+    } else {
+      lines.push(
+        `SIGGAM: carga este mismo ID (${res.id}) como sensorMspbsId de la planta en SIGGAM ` +
+          "para que ambos sistemas la identifiquen igual."
+      );
+    }
+    return { content: [{ type: "text", text: lines.join("\n") }] };
   }
 );
 
