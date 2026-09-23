@@ -25,8 +25,8 @@
 #include <ArduinoJson.h>
 
 // ── CONFIGURACIÓN DE RED ────────────────────────────────────
-const char* WIFI_SSID     = "ONYX";
-const char* WIFI_PASSWORD = "oingenieria2019";
+// WIFI_SSID y WIFI_PASSWORD: crea secrets.h a partir de secrets.example.h
+#include "secrets.h"
 
 // ── URL DEL BACKEND (Google Apps Script) ───────────────────
 const char* API_URL = "https://script.google.com/macros/s/AKfycby0PXjgE7OZu17b162eEKmWzk0J6px7W4fBaiIZbzZ43eXq12_7NUfOlQ46drYPidcn/exec";

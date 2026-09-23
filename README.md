@@ -127,11 +127,10 @@ git push origin main
 
 ### Paso 5: Configurar el ESP32
 
-1. Abre `esp32/plant_monitor.ino` en Arduino IDE.
-2. Reemplaza:
-   - `TU_SSID_WIFI` → nombre de tu red Wi-Fi
-   - `TU_PASSWORD_WIFI` → contraseña de tu red
-   - `REEMPLAZAR_CON_TU_DEPLOYMENT_ID` → el mismo ID de Apps Script de Vercel
+1. Copia `esp32/secrets.example.h` como `esp32/secrets.h` y pon el nombre y la contraseña
+   de tu red Wi-Fi. `secrets.h` está en `.gitignore` y no se sube al repositorio.
+2. Abre `esp32/plant_monitor.ino` en Arduino IDE (con `secrets.h` en la misma carpeta) y
+   comprueba que `API_URL` apunta a tu implementación de Apps Script.
 3. Instala las librerías desde el Gestor de Librerías:
    - `ArduinoJson` ≥ 6.x (Benoit Blanchon)
 4. Selecciona la placa **ESP32 Dev Module** y sube el firmware.

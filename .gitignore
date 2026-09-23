@@ -10,6 +10,9 @@ frontend/.env.development.local
 frontend/.env.test.local
 frontend/.env.production.local
 
+# Credenciales WiFi del firmware
+esp32/secrets.h
+
 # Logs
 *.log
 npm-debug.log*
