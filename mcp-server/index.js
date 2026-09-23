@@ -81,6 +81,15 @@ function computeStatus(latestRow, nowIso) {
   return { online, lastSeen: latestRow.timestamp, ageSeconds: Math.round(ageMs / 1000) };
 }
 
+function normName(s) {
+  return String(s ?? "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function findHospital(hospitals, query) {
   const q = query.trim().toLowerCase();
   return (
@@ -190,6 +199,52 @@ server.registerTool(
 );
 
 server.registerTool(
+  "check_hospitals",
+  {
+    title: "Revisar hospitales duplicados o con ID dudoso",
+    description:
+      "Revisa los hospitales registrados y reporta posibles duplicados (mismo nombre " +
+      "y ciudad, ignorando mayúsculas y tildes) e IDs que no tienen formato UUID " +
+      "estándar, que pueden romper la correspondencia con el sensorMspbsId de SIGGAM. " +
+      "Solo lectura: no modifica nada.",
+    inputSchema: {},
+    annotations: { readOnlyHint: true },
+  },
+  async () => {
+    const hospitals = await fetchHospitals();
+    const groups = {};
+    for (const h of hospitals) {
+      const key = `${normName(h.nombre)}|${normName(h.ciudad)}`;
+      (groups[key] ||= []).push(h);
+    }
+    const dups = Object.values(groups).filter((g) => g.length > 1);
+    const badIds = hospitals.filter((h) => !UUID_RE.test(String(h.id).trim()));
+
+    const lines = [`Hospitales registrados: ${hospitals.length}`];
+    if (dups.length === 0) {
+      lines.push("Duplicados: ninguno.");
+    } else {
+      lines.push(`Posibles duplicados (${dups.length} grupos):`);
+      for (const g of dups) {
+        lines.push(`- ${g[0].nombre} (${g[0].ciudad || "sin ciudad"}):`);
+        for (const h of g) lines.push(`    id ${h.id} · creado ${h.created_at || "?"} · ${h.activo ? "activo" : "inactivo"}`);
+      }
+      lines.push(
+        "Para decidir cuál conservar: el que SIGGAM tenga como sensorMspbsId y al que envía datos el ESP32. " +
+          "Los otros se pueden desactivar o borrar desde el panel de administración."
+      );
+    }
+    if (badIds.length === 0) {
+      lines.push("IDs con formato UUID estándar: todos.");
+    } else {
+      lines.push("IDs sin formato UUID estándar (confirmar con SIGGAM):");
+      for (const h of badIds) lines.push(`- ${h.nombre} (${h.ciudad || "sin ciudad"}): "${h.id}"`);
+    }
+    return { content: [{ type: "text", text: lines.join("\n") }] };
+  }
+);
+
+server.registerTool(
   "create_hospital",
   {
     title: "Crear hospital",
@@ -238,11 +293,14 @@ server.registerTool(
       };
     }
 
+    // Mismo criterio que el backend: id exacto, o nombre + ciudad sin
+    // distinguir mayúsculas, tildes ni espacios.
     const existing = await fetchHospitals();
     const dup = existing.find(
       (h) =>
-        (args.id && h.id === args.id) ||
-        h.nombre.trim().toLowerCase() === args.nombre.trim().toLowerCase()
+        (args.id && String(h.id).trim() === args.id) ||
+        (normName(h.nombre) === normName(args.nombre) &&
+          normName(h.ciudad) === normName(args.ciudad))
     );
     if (dup) {
       return {

@@ -70,20 +70,67 @@ function doPost(e) {
   } catch(ex) { Logger.log('doPost ERROR: ' + ex.message); return err_(ex.message); }
 }
 
+// Columnas A-N: formato original. Desde la O: datos del PLC BOGE, con los
+// mismos nombres que envían los firmwares (contrato plc_*). Solo se añaden
+// al final para no desplazar columnas que ya leen el dashboard y SIGGAM.
+const LEGACY_COLS = 14;
+const PLC_FIELDS = [
+  'plc_online', 'plc_plant_state', 'plc_plant_state_label',
+  'plc_o2_content_pct', 'plc_gas_flow_nm3h', 'plc_gas_pressure_barg',
+  'plc_air_inlet_pressure_barg', 'plc_gas_temp_c', 'plc_air_inlet_temp_c',
+  'plc_gas_dewpoint_c', 'plc_air_inlet_dewpoint_c',
+  'plc_service_hours_total', 'plc_service_hours_partial',
+  'plc_flow_total_nm3', 'plc_flow_partial_nm3',
+  'plc_alarms', 'plc_faults', 'plc_alarms_ack', 'plc_valves', 'plc_life_bit',
+];
+const PLC_JSON_FIELDS = ['plc_alarms_ack', 'plc_valves'];
+const DATA_COLS = LEGACY_COLS + PLC_FIELDS.length;
+
+function ensurePlcHeaders_(sheet) {
+  if (sheet.getMaxColumns() >= DATA_COLS &&
+      sheet.getRange(1, LEGACY_COLS + 1).getValue() === PLC_FIELDS[0]) return;
+  if (sheet.getMaxColumns() < DATA_COLS) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), DATA_COLS - sheet.getMaxColumns());
+  }
+  sheet.getRange(1, LEGACY_COLS + 1, 1, PLC_FIELDS.length).setValues([PLC_FIELDS])
+    .setFontWeight('bold').setBackground('#0f172a').setFontColor('#38bdf8');
+}
+
+// Filas de equipos sin PLC dejan estas celdas vacías (se devuelven como null).
+function plcCell_(body, key) {
+  var v = body[key];
+  if (v === undefined || v === null) return '';
+  if (PLC_JSON_FIELDS.indexOf(key) !== -1) return JSON.stringify(v);
+  return v;
+}
+
+// Lee las filas de datos sin fallar si la hoja aún no tiene las columnas PLC.
+function readDataRows_(sheet, start, last) {
+  var width = Math.min(DATA_COLS, sheet.getMaxColumns());
+  var vals = sheet.getRange(start, 1, last - start + 1, width).getValues();
+  if (width < DATA_COLS) {
+    vals.forEach(function(r) { while (r.length < DATA_COLS) r.push(''); });
+  }
+  return vals;
+}
+
 function postData_(body) {
   var sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName(SH_DATA);
   if (!sheet) return err_('Hoja ' + SH_DATA + ' no encontrada.');
+  ensurePlcHeaders_(sheet);
   // Guardamos el timestamp como texto ISO (UTC). Si se guarda como objeto
   // Date, Google Sheets lo reinterpreta segun la zona horaria de la hoja al
   // leerlo, desfasandolo varias horas y rompiendo la deteccion de conexion.
-  sheet.appendRow([
+  var row = [
     new Date().toISOString(), body.hospital_id||'', body.o2_flow_m3h||0,
     body.tower_a_pressure_bar||0, body.tower_b_pressure_bar||0,
     body.o2_tank_pressure_bar||0, body.o2_purity_pct||0,
     body.psa_dewpoint_c||0, body.compressor_status||'',
     body.compressor_hours||0, body.air_line_pressure_bar||0,
     body.air_dewpoint_c||0, body.vacuum_pump_status||'', body.vacuum_level_mmhg||0,
-  ]);
+  ];
+  PLC_FIELDS.forEach(function(k) { row.push(plcCell_(body, k)); });
+  sheet.appendRow(row);
   return ok_({ timestamp: new Date().toISOString() });
 }
 
@@ -95,7 +142,7 @@ function getData_(hospitalId) {
   // Escanea muchas filas hacia atras para encontrar registros aunque el
   // equipo lleve tiempo sin enviar (sus filas quedan empujadas hacia arriba).
   var start = Math.max(2, last - SCAN_ROWS + 1);
-  var vals  = sheet.getRange(start, 1, last - start + 1, 14).getValues();
+  var vals  = readDataRows_(sheet, start, last);
   var rows  = vals.filter(function(r) { return !hospitalId || r[1] === hospitalId; }).slice(-MAX_ROWS).map(rowToObj_);
   return ok_({ count: rows.length, rows: rows, now: new Date().toISOString() });
 }
@@ -106,7 +153,7 @@ function getLatestAll_() {
   var last = sheet.getLastRow();
   if (last < 2) return ok_({ count: 0, rows: [], now: new Date().toISOString() });
   var start = Math.max(2, last - SCAN_ROWS + 1);
-  var vals  = sheet.getRange(start, 1, last - start + 1, 14).getValues();
+  var vals  = readDataRows_(sheet, start, last);
   var map   = {};
   vals.forEach(function(r) { if (r[1]) map[r[1]] = rowToObj_(r); });
   return ok_({ count: Object.keys(map).length, rows: Object.values(map), now: new Date().toISOString() });
@@ -117,13 +164,22 @@ function rowToObj_(r) {
   // si es un objeto Date (filas antiguas) se normaliza a ISO UTC.
   var ts = null;
   if (r[0]) ts = (typeof r[0] === 'string') ? r[0] : new Date(r[0]).toISOString();
-  return {
+  var obj = {
     timestamp: ts,
     hospital_id: r[1], o2_flow_m3h: r[2], tower_a_pressure_bar: r[3],
     tower_b_pressure_bar: r[4], o2_tank_pressure_bar: r[5], o2_purity_pct: r[6],
     psa_dewpoint_c: r[7], compressor_status: r[8], compressor_hours: r[9],
     air_line_pressure_bar: r[10], air_dewpoint_c: r[11], vacuum_pump_status: r[12], vacuum_level_mmhg: r[13],
   };
+  PLC_FIELDS.forEach(function(k, i) {
+    var v = r[LEGACY_COLS + i];
+    if (v === '' || v === undefined) { obj[k] = null; return; }
+    if (PLC_JSON_FIELDS.indexOf(k) !== -1) {
+      try { v = JSON.parse(v); } catch (e) { v = null; }
+    }
+    obj[k] = v;
+  });
+  return obj;
 }
 
 function getHospitals_() {
@@ -141,8 +197,11 @@ function addHospital_(body) {
   // Permite fijar un id externo (ej. el UUID que ya usa el sistema ESP32/
   // sensorMspbsId en SIGGAM) para que ambos sistemas identifiquen al mismo
   // hospital con el mismo id. Si no se pasa, se genera uno como antes.
-  var id = body.id || Utilities.getUuid();
+  // El id se guarda tal cual (solo sin espacios): SIGGAM compara el texto exacto.
+  var id = String(body.id || '').trim() || Utilities.getUuid();
   if (findHospitalRow_(sheet, id)) return err_('Ya existe un hospital con ese id: ' + id);
+  var dup = findHospitalByName_(sheet, body.nombre, body.ciudad);
+  if (dup) return err_('Ya existe un hospital con ese nombre y ciudad (id ' + dup + ').');
   var th = body.thresholds || {}, eq = body.equipment || {};
   sheet.appendRow([
     id, body.nombre||'', body.ciudad||'', body.direccion||'', body.activo !== false,
@@ -200,7 +259,27 @@ function findHospitalRow_(sheet, id) {
   var last = sheet.getLastRow();
   if (last < 2) return null;
   var ids = sheet.getRange(2, 1, last - 1, 1).getValues();
-  for (var i = 0; i < ids.length; i++) { if (ids[i][0] === id) return i + 2; }
+  id = String(id || '').trim();
+  for (var i = 0; i < ids.length; i++) { if (String(ids[i][0]).trim() === id) return i + 2; }
+  return null;
+}
+
+function normName_(s) {
+  return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+// Devuelve el id del hospital con el mismo nombre y ciudad (sin distinguir
+// mayúsculas, tildes ni espacios), o null.
+function findHospitalByName_(sheet, nombre, ciudad) {
+  var n = normName_(nombre), c = normName_(ciudad);
+  if (!n) return null;
+  var last = sheet.getLastRow();
+  if (last < 2) return null;
+  var vals = sheet.getRange(2, 1, last - 1, 3).getValues();
+  for (var i = 0; i < vals.length; i++) {
+    if (vals[i][0] && normName_(vals[i][1]) === n && normName_(vals[i][2]) === c) return vals[i][0];
+  }
   return null;
 }
 
@@ -222,6 +301,7 @@ function initAll() {
   var d  = ss.getSheetByName(SH_DATA) || ss.insertSheet(SH_DATA);
   var h  = ss.getSheetByName(SH_HOSP) || ss.insertSheet(SH_HOSP);
   styleHeaders_(d, ['Timestamp','hospital_id','Caudal_O2_m3h','Presion_Torre_A_bar','Presion_Torre_B_bar','Presion_Tanque_O2_bar','Pureza_O2_pct','DewPoint_PSA_C','Estado_Compresor','Horas_Compresor','Presion_Linea_Aire_bar','DewPoint_Aire_C','Estado_Bomba_Vacio','Nivel_Vacio_mmHg']);
+  ensurePlcHeaders_(d);
   styleHeaders_(h, ['id','nombre','ciudad','direccion','activo','o2_purity_warn','o2_purity_critical','air_pressure_min','air_pressure_max','vacuum_min_mmhg','equipment_json','created_at','lat','lon']);
   Logger.log('✅ Hojas inicializadas.');
 }

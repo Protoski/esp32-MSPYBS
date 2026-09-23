@@ -66,26 +66,35 @@ enum Reg : uint8_t {
   R_TT02 = 5,          // Temp. entrada aire     °C /10
   R_MT01 = 6,          // P. rocío gas producto  °C /10
   R_MT02 = 7,          // P. rocío entrada aire  °C /10
-  R_SERVTIME_L = 11,   // Horas totales (DINT, L/U)
-  R_FLOWTOTAL_L = 15,  // Flujo total Nm3 (DINT, L/U)
-  R_ALARMS1 = 19,
-  R_ALARMS2 = 20,
-  R_FAULTS1 = 21,
+  R_SERVTIME_L = 11,   // Horas totales (L/U)
+  R_SERVPART_L = 13,   // Horas parciales (L/U)
+  R_FLOWTOTAL_L = 15,  // Flujo total Nm3 (L/U)
+  R_FLOWPART_L = 17,   // Flujo parcial Nm3 (L/U)
+  R_ALARMS_L = 19,     // Alarmas 1/2 (máscara de bits)
+  R_FAULTS_L = 21,     // Fallos 1/2 (máscara de bits)
+  R_ACK = 23,          // 3 palabras de alarmas reconocidas
   R_ESTADO  = 26,      // 0 listo, 1 marcha, 2 parando, 3/4 espera, 11 rearranque
+  R_VALVES = 27,       // 9 posiciones de válvula
+  R_LIFEBIT = 40,
 };
 
-const uint16_t FAULT1_COMPRESOR = 1 << 8;
+const uint32_t FAULT_COMPRESOR = 1UL << 8;
 
 struct DatosPLC {
-  float    o2Pct, caudal, presProducto, presAire;
-  float    tempProducto, tempAire, rocioProducto, rocioAire;
-  long     horasTotales, flujoTotal;
-  uint16_t alarmas1, alarmas2, fallos1;
+  double   o2Pct, caudal, presProducto, presAire;
+  double   tempProducto, tempAire, rocioProducto, rocioAire;
+  uint32_t horasTotales, horasParciales, flujoTotal, flujoParcial;
+  uint32_t alarmas, fallos;
+  uint16_t alarmasAck[3];
+  uint16_t valvulas[9];
+  uint16_t lifeBit;
   int      estado;
 };
 
 EthernetClient plc;
 unsigned long  lastSendTime = 0;
+DatosPLC       ultimo;
+bool           hayDatos = false;
 
 // ============================================================
 void setup() {
@@ -121,12 +130,17 @@ void loop() {
   lastSendTime = millis();
 
   DatosPLC d;
-  if (!leerPLC(d)) {
-    Serial.println("[PLC] Sin datos: no se envía nada en este ciclo.");
-    return;
+  bool online = leerPLC(d);
+  if (online) {
+    ultimo = d;
+    hayDatos = true;
+    imprimirDatos(d);
+  } else {
+    Serial.println(hayDatos
+      ? "[PLC] Sin respuesta: se envía plc_online=false con el último dato válido."
+      : "[PLC] Sin respuesta y sin datos previos: se envía solo plc_online=false.");
   }
-  imprimirDatos(d);
-  if (WiFi.status() == WL_CONNECTED) sendData(d);
+  if (WiFi.status() == WL_CONNECTED) sendData(online);
 }
 
 // ============================================================
@@ -222,11 +236,17 @@ bool leerRegistros(uint16_t offset, uint16_t cantidad, uint16_t* destino) {
   return true;
 }
 
-float escala10(uint16_t raw) { return (int16_t)raw / 10.0f; }
+// double: con float, 6.7 se serializa como 6.699999809 en el JSON
+double escala10(uint16_t raw) { return (int16_t)raw / 10.0; }
 
-// El manual define los DINT como V = UR x 32768 + LR
-long dint(const uint16_t* r, uint8_t idxL) {
-  return (long)r[idxL + 1] * 32768L + r[idxL];
+// Contadores: el manual define V = UR x 32768 + LR (no es el <<16 estándar)
+uint32_t boge32(const uint16_t* r, uint8_t idxL) {
+  return (uint32_t)r[idxL + 1] * 32768UL + r[idxL];
+}
+
+// Alarmas y fallos son máscaras de bits: se combinan con <<16
+uint32_t bitmask32(const uint16_t* r, uint8_t idxL) {
+  return ((uint32_t)r[idxL + 1] << 16) | r[idxL];
 }
 
 bool leerPLC(DatosPLC& d) {
@@ -241,24 +261,29 @@ bool leerPLC(DatosPLC& d) {
   d.tempAire      = escala10(r[R_TT02]);
   d.rocioProducto = escala10(r[R_MT01]);
   d.rocioAire     = escala10(r[R_MT02]);
-  d.horasTotales  = dint(r, R_SERVTIME_L);
-  d.flujoTotal    = dint(r, R_FLOWTOTAL_L);
-  d.alarmas1      = r[R_ALARMS1];
-  d.alarmas2      = r[R_ALARMS2];
-  d.fallos1       = r[R_FAULTS1];
-  d.estado        = r[R_ESTADO];
+  d.horasTotales   = boge32(r, R_SERVTIME_L);
+  d.horasParciales = boge32(r, R_SERVPART_L);
+  d.flujoTotal     = boge32(r, R_FLOWTOTAL_L);
+  d.flujoParcial   = boge32(r, R_FLOWPART_L);
+  d.alarmas        = bitmask32(r, R_ALARMS_L);
+  d.fallos         = bitmask32(r, R_FAULTS_L);
+  for (int i = 0; i < 3; i++) d.alarmasAck[i] = r[R_ACK + i];
+  for (int i = 0; i < 9; i++) d.valvulas[i] = r[R_VALVES + i];
+  d.lifeBit        = r[R_LIFEBIT];
+  d.estado         = r[R_ESTADO];
   return true;
 }
 
+// Mismas etiquetas que el firmware MicroPython (contrato plc_*)
 const char* textoEstado(int e) {
   switch (e) {
-    case 0:  return "listo";
-    case 1:  return "en marcha";
-    case 2:  return "parando";
-    case 3:  return "entrando en espera";
-    case 4:  return "en espera";
-    case 11: return "rearranque tras apagón";
-    default: return "desconocido";
+    case 0:  return "LISTA_PARA_COMENZAR";
+    case 1:  return "FUNCIONANDO";
+    case 2:  return "APAGADO_EN_PROGRESO";
+    case 3:  return "ESPERA_EN_PROGRESO";
+    case 4:  return "ESPERA_COMPLETADA";
+    case 11: return "REINICIO_AUTOMATICO_TRAS_CORTE";
+    default: return "DESCONOCIDO";
   }
 }
 
@@ -268,28 +293,59 @@ void imprimirDatos(const DatosPLC& d) {
                 d.o2Pct, d.caudal, d.presProducto, d.presAire);
   Serial.printf("      T.prod %.1f C  T.aire %.1f C  Rocío prod %.1f C  Rocío aire %.1f C\n",
                 d.tempProducto, d.tempAire, d.rocioProducto, d.rocioAire);
-  Serial.printf("      Horas %ld h  Flujo total %ld Nm3  Alarmas 0x%04X/0x%04X  Fallos 0x%04X\n",
-                d.horasTotales, d.flujoTotal, d.alarmas1, d.alarmas2, d.fallos1);
+  Serial.printf("      Horas %lu h  Flujo total %lu Nm3  Alarmas 0x%08lX  Fallos 0x%08lX\n",
+                (unsigned long)d.horasTotales, (unsigned long)d.flujoTotal,
+                (unsigned long)d.alarmas, (unsigned long)d.fallos);
 }
 
 // ============================================================
 // ENVÍO DE DATOS AL BACKEND
-// Solo se envían campos que el PLC BOGE proporciona; el resto de
-// columnas (torres, aire médico, vacío) no existen en este equipo.
+// Campos plc_*: mismo contrato que el firmware MicroPython, los guarda el
+// backend y los lee SIGGAM. Los campos originales (o2_purity_pct, etc.) se
+// siguen enviando para el dashboard; torres, aire médico y vacío no existen
+// en este equipo. Si el PLC no responde se envía plc_online=false con el
+// último dato válido (nunca ceros inventados).
 // ============================================================
-void sendData(const DatosPLC& d) {
-  StaticJsonDocument<512> doc;
+void sendData(bool online) {
+  StaticJsonDocument<1536> doc;
 
-  doc["action"]               = "data";
-  doc["token"]                = DEVICE_TOKEN;
-  doc["hospital_id"]          = HOSPITAL_ID;
-  doc["o2_purity_pct"]        = d.o2Pct;
-  doc["o2_flow_m3h"]          = d.caudal;
-  doc["o2_tank_pressure_bar"] = d.presProducto;
-  doc["psa_dewpoint_c"]       = d.rocioAire;
-  doc["compressor_status"]    = (d.fallos1 & FAULT1_COMPRESOR) ? "FAULT"
-                              : (d.estado == 1)                 ? "ON" : "OFF";
-  doc["compressor_hours"]     = d.horasTotales;
+  doc["action"]      = "data";
+  doc["token"]       = DEVICE_TOKEN;
+  doc["hospital_id"] = HOSPITAL_ID;
+  doc["plc_online"]  = online;
+
+  if (hayDatos) {
+    const DatosPLC& d = ultimo;
+    doc["o2_purity_pct"]        = d.o2Pct;
+    doc["o2_flow_m3h"]          = d.caudal;
+    doc["o2_tank_pressure_bar"] = d.presProducto;
+    doc["psa_dewpoint_c"]       = d.rocioAire;
+    doc["compressor_status"]    = (d.fallos & FAULT_COMPRESOR) ? "FAULT"
+                                : (d.estado == 1)               ? "ON" : "OFF";
+    doc["compressor_hours"]     = d.horasTotales;
+
+    doc["plc_plant_state"]             = d.estado;
+    doc["plc_plant_state_label"]       = textoEstado(d.estado);
+    doc["plc_o2_content_pct"]          = d.o2Pct;
+    doc["plc_gas_flow_nm3h"]           = d.caudal;
+    doc["plc_gas_pressure_barg"]       = d.presProducto;
+    doc["plc_air_inlet_pressure_barg"] = d.presAire;
+    doc["plc_gas_temp_c"]              = d.tempProducto;
+    doc["plc_air_inlet_temp_c"]        = d.tempAire;
+    doc["plc_gas_dewpoint_c"]          = d.rocioProducto;
+    doc["plc_air_inlet_dewpoint_c"]    = d.rocioAire;
+    doc["plc_service_hours_total"]     = d.horasTotales;
+    doc["plc_service_hours_partial"]   = d.horasParciales;
+    doc["plc_flow_total_nm3"]          = d.flujoTotal;
+    doc["plc_flow_partial_nm3"]        = d.flujoParcial;
+    doc["plc_alarms"]                  = d.alarmas;
+    doc["plc_faults"]                  = d.fallos;
+    JsonArray ack = doc.createNestedArray("plc_alarms_ack");
+    for (int i = 0; i < 3; i++) ack.add(d.alarmasAck[i]);
+    JsonArray valves = doc.createNestedArray("plc_valves");
+    for (int i = 0; i < 9; i++) valves.add(d.valvulas[i]);
+    doc["plc_life_bit"]                = d.lifeBit;
+  }
 
   String jsonBody;
   serializeJson(doc, jsonBody);
