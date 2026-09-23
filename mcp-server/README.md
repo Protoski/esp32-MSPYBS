@@ -16,10 +16,13 @@ desplegado (`backend/google-apps-script.js`), consultando las acciones
   y hace cuánto.
 - **`list_plants_status`** — lista todas las plantas registradas con su
   estado actual.
+- **`check_hospitals`** — solo lectura: reporta hospitales duplicados (mismo
+  nombre y ciudad, ignorando mayúsculas y tildes) e IDs sin formato UUID
+  estándar que conviene confirmar con SIGGAM.
 - **`create_hospital`** — da de alta un hospital (nombre, ciudad, dirección,
   ubicación, umbrales de pureza O₂ y equipos presentes). Devuelve el ID, que
   es el `HOSPITAL_ID` del firmware del ESP32. No crea nada si ya existe un
-  hospital con el mismo nombre o ID. Requiere `MSPYBS_ADMIN_TOKEN`.
+  hospital con el mismo ID, o con el mismo nombre y ciudad. Requiere `MSPYBS_ADMIN_TOKEN`.
 
 ### Compatibilidad con SIGGAM
 
