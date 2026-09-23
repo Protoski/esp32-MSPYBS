@@ -28,8 +28,11 @@ esp32-MSPYBS/
 ├── backend/
 │   └── google-apps-script.js   # Código para pegar en script.google.com
 ├── esp32/
-│   └── plant_monitor.ino       # Firmware Arduino para ESP32
-├── mcp-server/                 # Servidor MCP: consulta estado en línea/fuera de línea
+│   ├── plant_monitor.ino       # Firmware Arduino: PLC BOGE (Modbus TCP, ENC28J60) → WiFi
+│   ├── secrets.example.h       # Plantilla de WiFi, URL y DEVICE_TOKEN (copiar a secrets.h)
+│   ├── diagnostico_enc28j60/   # Sketch de prueba del cableado SPI del ENC28J60
+│   └── micropython/            # Firmware MicroPython: sensores 4-20mA + PLC
+├── mcp-server/                 # Servidor MCP: estado de plantas y alta de hospitales
 ├── frontend/                   # Aplicación Next.js
 │   ├── app/
 │   │   ├── layout.tsx

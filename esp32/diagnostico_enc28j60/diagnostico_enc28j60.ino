@@ -1,7 +1,7 @@
 /**
  * Diagnostico ENC28J60 <-> ESP32 (sin librerias de red)
  * Lee registros del chip por SPI para comprobar cableado y alimentacion.
- * Mismo cableado que sketch.ino: SCK=18, SO=19, SI=23, CS=5, RESET=27
+ * Mismo cableado que plant_monitor.ino: SCK=18, SO=19, SI=23, CS=5, RESET=27
  */
 
 #include <SPI.h>

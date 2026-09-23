@@ -160,3 +160,49 @@ async function getPlantStatuses(baseUrl) {
 | `air_dewpoint_c` | Punto de rocío aire médico (°C) |
 | `vacuum_pump_status` | `ON` / `OFF` / `FAULT` |
 | `vacuum_level_mmhg` | Nivel de vacío (mmHg, valores negativos) |
+
+Las plantas que no tienen un equipo (por ejemplo, sin bomba de vacío) envían
+`0` en esos campos; consulta `equipment` en `action=hospitals` antes de
+interpretarlos.
+
+## Datos del PLC BOGE (`plc_*`)
+
+Las plantas con generador de O₂ BOGE (PLC Siemens S7-1200) envían además estos
+campos en cada lectura de `latest_all` y `data`. En equipos sin PLC, y en filas
+anteriores a este cambio, valen `null`.
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `plc_online` | bool | `false` si el ESP32 no pudo leer el PLC: los demás `plc_*` son el **último dato válido**, no la lectura actual |
+| `plc_plant_state` | int | 0 listo (detenido), 1 funcionando, 2 apagándose, 3 entrando en espera, 4 en espera, 11 rearranque tras corte |
+| `plc_plant_state_label` | string | `LISTA_PARA_COMENZAR`, `FUNCIONANDO`, `APAGADO_EN_PROGRESO`, `ESPERA_EN_PROGRESO`, `ESPERA_COMPLETADA`, `REINICIO_AUTOMATICO_TRAS_CORTE` |
+| `plc_o2_content_pct` | number | Contenido de O₂ del gas producto (%) |
+| `plc_gas_flow_nm3h` | number | Caudal de gas producto (Nm³/h) |
+| `plc_gas_pressure_barg` | number | Presión de gas producto (barg) |
+| `plc_air_inlet_pressure_barg` | number | Presión de entrada de aire (barg) |
+| `plc_gas_temp_c` / `plc_air_inlet_temp_c` | number | Temperatura de gas producto / entrada de aire (°C) |
+| `plc_gas_dewpoint_c` / `plc_air_inlet_dewpoint_c` | number | Punto de rocío de gas producto / entrada de aire (°C) |
+| `plc_service_hours_total` / `plc_service_hours_partial` | int | Horas de funcionamiento del generador |
+| `plc_flow_total_nm3` / `plc_flow_partial_nm3` | int | Flujo acumulado de gas producto (Nm³) |
+| `plc_alarms` | int | Máscara de bits: `ALARMS 1` (bits 0-15) y `ALARMS 2` (bits 16-31), manual BOGE pág. 52-53 |
+| `plc_faults` | int | Máscara de bits de fallos (`FAULT ARRAY 1/2`). Bit 0 analizador O₂, 1 flujómetro, 2-7 transmisores, 8 compresor, 9 secador, 10 mantenimiento de filtros, 11 mantenimiento de válvulas, 12 alimentación |
+| `plc_alarms_ack` | int[3] | Palabras de alarmas reconocidas (registros 40024-40026) |
+| `plc_valves` | int[9] | Posición de válvulas POV-101 a POV-110 (0 cerrada, 1 abierta) |
+| `plc_life_bit` | int | Reloj de 0,5 Hz del PLC; si deja de alternar, el programa del PLC está detenido |
+
+Con el generador detenido o en espera, los valores de pureza y caudal en 0 son
+normales: evalúa la pureza contra los umbrales solo cuando
+`plc_plant_state == 1` y `plc_online == true`.
+
+## Identificadores de planta y SIGGAM
+
+- El `id` de cada planta (`hospital_id` en las lecturas) es el mismo texto que
+  SIGGAM usa como `sensorMspbsId`. Compáralo como texto exacto: la mayoría son
+  UUID, pero se guardan tal como los asignó SIGGAM.
+- Un `id` no cambia nunca después de creado. Si SIGGAM ya tenía uno para la
+  planta, se usa ese al darla de alta; si no, se genera un UUID que hay que
+  cargar en SIGGAM.
+- El backend rechaza altas con un `id` existente o con el mismo nombre y ciudad
+  que otra planta (sin distinguir mayúsculas, tildes ni espacios), así que no
+  aparecen plantas duplicadas con distinto `id`.
+
