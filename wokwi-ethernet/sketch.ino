@@ -105,11 +105,17 @@ bool conectarEthernet() {
     Serial.println(" fallo. Usando IP estatica.");
     Ethernet.begin(mac, ipFallback);
   }
+  EthernetLinkStatus ls = Ethernet.linkStatus();
+  Serial.printf("[ETH] Enlace del cable: %s\n",
+                ls == LinkON ? "ACTIVO" : ls == LinkOFF ? "SIN ENLACE" : "DESCONOCIDO");
   if (Ethernet.localIP() == IPAddress(0, 0, 0, 0)) {
     Serial.println("[ETH] ERROR: sin IP asignada.");
     return false;
   }
-  Serial.printf("\n[ETH] IP: %s\n", Ethernet.localIP().toString().c_str());
+  Serial.printf("\n[ETH] IP: %s  Gateway: %s  DNS: %s\n",
+                Ethernet.localIP().toString().c_str(),
+                Ethernet.gatewayIP().toString().c_str(),
+                Ethernet.dnsServerIP().toString().c_str());
   return true;
 }
 
@@ -137,8 +143,11 @@ void enviarDatos() {
   EthernetClient client;
   Serial.printf("[ETH] Conectando a %s ...\n", HOST);
 
-  if (!client.connect(HOST, PORT)) {
-    Serial.println("[ETH] ERROR: sin conexion al servidor.");
+  // connect() devuelve 1 si conecta; 0 o negativo (p. ej. fallo de DNS) si no
+  int rc = client.connect(HOST, PORT);
+  if (rc != 1) {
+    Serial.printf("[ETH] ERROR: sin conexion al servidor (codigo %d).\n", rc);
+    client.stop();
     return;
   }
 
