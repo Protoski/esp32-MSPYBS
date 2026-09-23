@@ -18,6 +18,9 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 
 const API_URL = process.env.MSPYBS_API_URL;
+// Opcional: habilita las herramientas de escritura (ADMIN_TOKEN de las
+// Propiedades del script del backend).
+const ADMIN_TOKEN = process.env.MSPYBS_ADMIN_TOKEN;
 // Una planta se considera "en línea" si su último dato llegó hace menos de
 // esto (coincide con el criterio usado en el frontend: frontend/app/page.tsx).
 const ONLINE_THRESHOLD_MS = 60_000;
@@ -35,6 +38,21 @@ async function apiGet(params) {
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
   url.searchParams.set("_t", String(Date.now()));
   const res = await fetch(url.toString(), { cache: "no-store" });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.error || "Error desconocido del backend.");
+  return data;
+}
+
+async function apiPost(body) {
+  // text/plain evita el preflight CORS; Apps Script responde con un redirect
+  // que fetch sigue como GET hasta la respuesta real.
+  const res = await fetch(API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({ token: ADMIN_TOKEN, ...body }),
+    redirect: "follow",
+  });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = await res.json();
   if (!data.ok) throw new Error(data.error || "Error desconocido del backend.");
@@ -167,6 +185,103 @@ server.registerTool(
         }`
     );
     return { content: [{ type: "text", text: lines.join("\n") }] };
+  }
+);
+
+server.registerTool(
+  "create_hospital",
+  {
+    title: "Crear hospital",
+    description:
+      "Da de alta un hospital/planta nuevo en el sistema (hoja Hospitales). " +
+      "Devuelve el ID asignado, que es el HOSPITAL_ID que debe usar el ESP32 " +
+      "de esa planta. Requiere MSPYBS_ADMIN_TOKEN configurado en el servidor MCP.",
+    inputSchema: {
+      nombre: z.string().min(1).describe("Nombre del hospital."),
+      ciudad: z.string().optional().describe("Ciudad."),
+      direccion: z.string().optional().describe("Dirección."),
+      id: z
+        .string()
+        .uuid()
+        .optional()
+        .describe(
+          "UUID externo a reutilizar (ej. sensorMspbsId de SIGGAM). Si se omite, el backend genera uno."
+        ),
+      lat: z.number().min(-90).max(90).optional().describe("Latitud para el mapa."),
+      lon: z.number().min(-180).max(180).optional().describe("Longitud para el mapa."),
+      o2_purity_warn: z.number().optional().describe("Umbral de alerta de pureza O2 (%). Por defecto 93."),
+      o2_purity_critical: z.number().optional().describe("Umbral crítico de pureza O2 (%). Por defecto 90."),
+      psa_enabled: z.boolean().optional().describe("La planta tiene generador PSA de O2. Por defecto true."),
+      compressor_enabled: z.boolean().optional().describe("La planta tiene compresor de aire médico. Por defecto true."),
+      vacuum_enabled: z.boolean().optional().describe("La planta tiene bomba de vacío. Por defecto true."),
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+  },
+  async (args) => {
+    if (!ADMIN_TOKEN) {
+      return {
+        content: [
+          {
+            type: "text",
+            text:
+              "Falta la variable de entorno MSPYBS_ADMIN_TOKEN en la configuración del " +
+              "servidor MCP (valor de ADMIN_TOKEN en las Propiedades del script).",
+          },
+        ],
+        isError: true,
+      };
+    }
+
+    const existing = await fetchHospitals();
+    const dup = existing.find(
+      (h) =>
+        (args.id && h.id === args.id) ||
+        h.nombre.trim().toLowerCase() === args.nombre.trim().toLowerCase()
+    );
+    if (dup) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Ya existe un hospital que coincide: ${dup.nombre} (${dup.ciudad || "sin ciudad"}), id ${dup.id}. No se creó nada.`,
+          },
+        ],
+        isError: true,
+      };
+    }
+
+    const body = {
+      action: "add_hospital",
+      nombre: args.nombre.trim(),
+      ciudad: args.ciudad ?? "",
+      direccion: args.direccion ?? "",
+      activo: true,
+      thresholds: {
+        o2_purity_warn: args.o2_purity_warn,
+        o2_purity_critical: args.o2_purity_critical,
+      },
+      equipment: {
+        psa_enabled: args.psa_enabled,
+        compressor_enabled: args.compressor_enabled,
+        vacuum_enabled: args.vacuum_enabled,
+      },
+    };
+    if (args.id) body.id = args.id;
+    if (args.lat !== undefined) body.lat = args.lat;
+    if (args.lon !== undefined) body.lon = args.lon;
+
+    const res = await apiPost(body);
+    return {
+      content: [
+        {
+          type: "text",
+          text:
+            `Hospital creado: ${body.nombre} (${body.ciudad || "sin ciudad"}).\n` +
+            `ID: ${res.id}\n` +
+            `Usa este ID como HOSPITAL_ID en el firmware del ESP32 de esta planta.`,
+        },
+      ],
+    };
   }
 );
 

@@ -1,9 +1,9 @@
 # mspybs-mcp-server
 
-Servidor MCP (Model Context Protocol) que permite a cualquier usuario consultar,
-desde un cliente compatible (Claude Desktop, etc.), si una planta de gases
-medicinales está **en línea** o **sin señal**, usando los mismos datos que el
-dashboard (Google Sheets vía Google Apps Script).
+Servidor MCP (Model Context Protocol) que permite, desde un cliente compatible
+(Claude Desktop, Claude Code, etc.), consultar si una planta de gases
+medicinales está **en línea** o **sin señal** y dar de alta hospitales nuevos,
+usando el mismo backend que el dashboard (Google Sheets vía Google Apps Script).
 
 No accede directamente al Sheet: reutiliza el backend de Apps Script ya
 desplegado (`backend/google-apps-script.js`), consultando las acciones
@@ -16,6 +16,11 @@ desplegado (`backend/google-apps-script.js`), consultando las acciones
   y hace cuánto.
 - **`list_plants_status`** — lista todas las plantas registradas con su
   estado actual.
+- **`create_hospital`** — da de alta un hospital (nombre, ciudad, dirección,
+  ubicación, umbrales de pureza O₂, equipos presentes y, opcionalmente, un
+  UUID externo como el `sensorMspbsId` de SIGGAM). Devuelve el ID, que es el
+  `HOSPITAL_ID` del firmware del ESP32. No crea nada si ya existe un hospital
+  con el mismo nombre o ID. Requiere `MSPYBS_ADMIN_TOKEN`.
 
 Una planta se considera **en línea** si su último dato llegó hace menos de
 60 segundos (mismo criterio que usa el frontend Next.js).
@@ -36,6 +41,15 @@ El servidor necesita la URL de implementación del Apps Script (la misma que
 MSPYBS_API_URL=https://script.google.com/macros/s/TU_DEPLOYMENT_ID/exec
 ```
 
+Para usar `create_hospital`, añade también el `ADMIN_TOKEN` de Apps Script
+(Configuración del proyecto → Propiedades del script). Sin él, las
+herramientas de consulta funcionan igual y `create_hospital` responde con
+un error explicativo:
+
+```
+MSPYBS_ADMIN_TOKEN=valor_de_ADMIN_TOKEN
+```
+
 ## Uso con Claude Desktop (u otro cliente MCP)
 
 Agrega esto a la configuración MCP del cliente (por ejemplo
@@ -48,18 +62,33 @@ Agrega esto a la configuración MCP del cliente (por ejemplo
       "command": "node",
       "args": ["/ruta/absoluta/al/repo/mcp-server/index.js"],
       "env": {
-        "MSPYBS_API_URL": "https://script.google.com/macros/s/TU_DEPLOYMENT_ID/exec"
+        "MSPYBS_API_URL": "https://script.google.com/macros/s/TU_DEPLOYMENT_ID/exec",
+        "MSPYBS_ADMIN_TOKEN": "valor_de_ADMIN_TOKEN"
       }
     }
   }
 }
 ```
 
+Con Claude Code, desde la carpeta del repo:
+
+```bash
+claude mcp add mspybs-plantas \
+  -e MSPYBS_API_URL="https://script.google.com/macros/s/TU_DEPLOYMENT_ID/exec" \
+  -e MSPYBS_ADMIN_TOKEN="valor_de_ADMIN_TOKEN" \
+  -- node "$(pwd)/mcp-server/index.js"
+```
+
+El token queda solo en la configuración local del cliente; no lo pongas en
+ningún archivo del repositorio.
+
 Luego cualquier usuario del cliente puede preguntar, por ejemplo:
 
 > ¿Está en línea la planta del Hospital de Clínicas?
 
 > Dame el estado de todas las plantas.
+
+> Crea el hospital "Hospital Regional de Luque" en Luque, sin bomba de vacío.
 
 y el asistente usará las herramientas `get_plant_status` / `list_plants_status`
 para responder con datos reales del Sheet.
