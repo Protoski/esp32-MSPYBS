@@ -1,65 +1,39 @@
-# Demo Wokwi: ESP32 + W5500 + HR911105A (Ethernet)
+# ESP32 + módulo Ethernet ENC28J60 (conector HR911105A)
 
-## Cómo probarlo en Wokwi
+El módulo tiene un chip **ENC28J60** (Microchip), un cristal de 25 MHz y el conector
+RJ45 **HR911105A** con magnéticos integrados. Se comunica con el ESP32 por SPI.
 
-1. Ve a https://wokwi.com/projects/new/esp32
-2. Reemplaza el contenido de `diagram.json` con el de este archivo.
-3. Reemplaza el contenido de `sketch.ino` con el de este archivo.
-4. Instala en Wokwi las librerías: **Ethernet** (Arduino) y **ArduinoJson** ≥6.x.
-5. Start simulation → el Serial Monitor mostrará la IP asignada y los POSTs enviados.
+## Conexión
 
----
+| Pin del módulo | ESP32   | Notas                                   |
+|----------------|---------|-----------------------------------------|
+| VCC            | 3.3V    | NO usar 5V                              |
+| GND            | GND     |                                         |
+| SCK            | GPIO18  |                                         |
+| SI             | GPIO23  | MOSI                                    |
+| SO             | GPIO19  | MISO                                    |
+| CS             | GPIO5   |                                         |
+| RESET          | GPIO27  |                                         |
+| INT            | GPIO26  | Opcional                                |
+| CLKOUT         | —       | Sin conectar                            |
+| WOL            | —       | Sin conectar                            |
 
-## Esquema de conexión real (Hardware)
+El ENC28J60 consume unos 150-180 mA. Si el ESP32 se reinicia o el DHCP falla de forma
+intermitente, alimenta el módulo con un regulador de 3.3V aparte (GND común).
 
-```
-HR911105A (RJ45 con magnéticos integrados)
-          │
-          │ par trenzado cat.5/6
-          ▼
-    ┌──────────────┐
-    │   W5500      │  ← controlador Ethernet SPI (5V tolerante, opera a 3.3V)
-    │  (SPI slave) │
-    └──────┬───────┘
-           │  SPI + control
-           ▼
-    ┌──────────────┐
-    │   ESP32      │
-    │  DevKit V1   │
-    └──────────────┘
+## Flashear con Arduino IDE
 
-W5500 pin  │  ESP32 GPIO  │  Notas
-───────────┼──────────────┼──────────────────────────────
-VCC        │  3.3V        │  NO conectar a 5V (daña el ESP32)
-GND        │  GND         │
-SCK        │  GPIO18      │  VSPI clock
-MOSI       │  GPIO23      │  VSPI MOSI
-MISO       │  GPIO19      │  VSPI MISO
-CS / SSEL  │  GPIO5       │  Chip Select activo-LOW
-RST        │  GPIO27      │  Reset activo-LOW
-INT        │  GPIO26      │  Interrupción (opcional)
-```
+1. Gestor de librerías → instala **EthernetENC** (Juraj Andrassy) y **ArduinoJson**.
+2. Abre `sketch.ino` **completo**: selecciona todo (Ctrl+A) en GitHub y pégalo sobre
+   un sketch vacío.
+3. Placa: **ESP32 Dev Module** → elige el puerto → Subir.
+4. Monitor serie a 115200 baudios: debe mostrar `[ETH] IP: ...`.
 
----
+## Limitaciones
 
-## Módulos comunes que usan HR911105A + W5500
-
-| Módulo         | Voltaje | Notas                              |
-|----------------|---------|------------------------------------|
-| WIZnet W5500   | 3.3V    | El más usado, SPI a 80MHz          |
-| Ebyte E30-TTL  | 3.3V    | Con antena, para redes industriales|
-| WeAct W5500    | 3.3V    | Compacto, con LEDs de estado       |
-
----
-
-## Nota sobre HTTPS / TLS
-
-El W5500 no tiene aceleración TLS en hardware. Para enviar HTTPS a
-Google Apps Script (como hace el `plant_monitor.ino` con WiFiClientSecure)
-tienes tres opciones:
-
-1. **Proxy HTTP→HTTPS local**: Raspberry Pi / servidor con nginx redirige el POST del
-   ESP32 hacia script.google.com via HTTPS.
-2. **SSL offloading en red local** (balanceador, router con Squid).
-3. **Mantener WiFi para HTTPS**: usa Ethernet como red primaria para alta disponibilidad
-   y WiFi solo para el POST HTTPS al script. Ambas interfaces pueden coexistir.
+- **Wokwi no tiene un componente ENC28J60**, así que este circuito no se puede simular
+  allí. `diagram.json` sirve solo como referencia de cableado.
+- El ENC28J60 no tiene TLS. Google Apps Script exige HTTPS, así que el POST por el
+  puerto 80 solo recibe un redirect: sirve para comprobar la conectividad, no para
+  guardar datos. Para producción, usa WiFi (`esp32/plant_monitor.ino`) para el POST
+  HTTPS o pon un proxy HTTP→HTTPS en la red local.

@@ -1,11 +1,12 @@
 /**
- * Monitor Planta Gases Medicinales - ESP32 + W5500 Ethernet
+ * Monitor Planta Gases Medicinales - ESP32 + ENC28J60 Ethernet
+ * Modulo: ENC28J60 + conector HR911105A
  *
- * Libreriass requeridas (Gestor de Librerias Arduino IDE):
- *   1. Ethernet         (autor: Arduino)  version >= 2.0.0
+ * Librerias requeridas (Gestor de Librerias Arduino IDE):
+ *   1. EthernetENC      (autor: Juraj Andrassy)
  *   2. ArduinoJson      (Benoit Blanchon) version >= 6.x
  *
- * Pinout W5500 -> ESP32:
+ * Pinout ENC28J60 -> ESP32:
  *   VCC   -> 3.3V
  *   GND   -> GND
  *   SCK   -> GPIO18
@@ -14,10 +15,11 @@
  *   CS    -> GPIO5
  *   RESET -> GPIO27
  *   INT   -> GPIO26  (opcional)
+ *   CLKOUT, WOL -> sin conectar
  */
 
 #include <SPI.h>
-#include <Ethernet.h>
+#include <EthernetENC.h>
 #include <ArduinoJson.h>
 
 // ---------- Pines ----------
@@ -50,12 +52,12 @@ bool          ethOK       = false;
 void setup() {
   Serial.begin(115200);
   delay(400);
-  Serial.println("\n=== Monitor Gases - Ethernet W5500 ===");
+  Serial.println("\n=== Monitor Gases - Ethernet ENC28J60 ===");
 
   pinMode(PIN_LED, OUTPUT);
   digitalWrite(PIN_LED, LOW);
 
-  // Reset hardware del W5500
+  // Reset hardware del ENC28J60
   pinMode(PIN_RST, OUTPUT);
   digitalWrite(PIN_RST, LOW);
   delay(60);
@@ -178,7 +180,7 @@ String readCompressorStatus() { return (random(200) == 0) ? "FAULT" : "ON"; }
 String readVacuumPumpStatus() { return (random(300) == 0) ? "FAULT" : "ON"; }
 
 /*
- * NOTA TLS: El W5500 no tiene SSL nativo. Google Apps Script
+ * NOTA TLS: El ENC28J60 no tiene SSL nativo. Google Apps Script
  * requiere HTTPS (puerto 443). Opciones para produccion:
  *   1. Proxy local HTTP->HTTPS: nginx en Raspberry Pi.
  *   2. Usar WiFi (plant_monitor.ino) para el POST HTTPS.
