@@ -131,6 +131,9 @@ git push origin main
    de tu red Wi-Fi. `secrets.h` está en `.gitignore` y no se sube al repositorio.
 2. Abre `esp32/plant_monitor.ino` en Arduino IDE (con `secrets.h` en la misma carpeta) y
    comprueba que `API_URL` apunta a tu implementación de Apps Script.
+3. El firmware lee el PLC S7-1200 del generador BOGE por Modbus TCP a través de un módulo
+   ENC28J60 (IP del ESP32 en la LAN: `100.100.200.50`; PLC: `100.100.200.10:501`) y envía
+   los datos por WiFi. Requiere la librería **EthernetENC**.
 3. Instala las librerías desde el Gestor de Librerías:
    - `ArduinoJson` ≥ 6.x (Benoit Blanchon)
 4. Selecciona la placa **ESP32 Dev Module** y sube el firmware.
