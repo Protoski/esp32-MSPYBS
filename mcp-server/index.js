@@ -223,40 +223,98 @@ server.registerTool(
   }
 );
 
+// Palabras que no distinguen un hospital de otro y abreviaturas habituales.
+const GENERIC_WORDS = new Set([
+  "hospital", "hospitales", "regional", "basico", "general", "distrital", "instituto",
+  "centro", "de", "del", "la", "las", "el", "los", "y", "e", "en", "psa", "boge",
+  "planta", "plantas", "oxigeno", "o2", "sanatorio", "unidad", "salud", "servicio",
+]);
+const ABBREVIATIONS = {
+  mcal: "mariscal", gral: "general", dr: "doctor", dra: "doctora", sta: "santa",
+  sto: "santo", hosp: "hospital", reg: "regional", pdte: "presidente", cnel: "coronel",
+  tte: "teniente", nac: "nacional", inst: "instituto",
+};
+
+function nameTokens(name) {
+  return new Set(
+    normName(name)
+      .replace(/[^a-z0-9]+/g, " ")
+      .split(" ")
+      .map((w) => ABBREVIATIONS[w] ?? w)
+      .filter((w) => w.length > 1 && !GENERIC_WORDS.has(w))
+  );
+}
+
+// Parecidos: las palabras distintivas de un nombre están todas en el otro
+// ("INERAM" ⊂ "Instituto ... INERAM PSA-BOGE", "Mcal. Estigarribia" =
+// "Hospital Regional de Mariscal Estigarribia"). La ciudad no se exige
+// igual porque a veces se carga el departamento.
+function similarHospitals(a, b) {
+  const ta = nameTokens(a.nombre), tb = nameTokens(b.nombre);
+  if (ta.size === 0 || tb.size === 0) {
+    return normName(a.nombre) === normName(b.nombre) && normName(a.ciudad) === normName(b.ciudad);
+  }
+  const [small, big] = ta.size <= tb.size ? [ta, tb] : [tb, ta];
+  return [...small].every((w) => big.has(w));
+}
+
+function findSimilar(hospitals, candidate) {
+  return hospitals.filter((h) => similarHospitals(h, candidate));
+}
+
 server.registerTool(
   "check_hospitals",
   {
     title: "Revisar hospitales duplicados o con ID dudoso",
     description:
-      "Revisa los hospitales registrados y reporta posibles duplicados (mismo nombre " +
-      "y ciudad, ignorando mayúsculas y tildes) e IDs que no tienen formato UUID " +
-      "estándar, que pueden romper la correspondencia con el sensorMspbsId de SIGGAM. " +
-      "Solo lectura: no modifica nada.",
+      "Revisa los hospitales registrados y reporta posibles duplicados: mismo nombre, o " +
+      "nombres parecidos (uno contenido en el otro, abreviaturas como Mcal./Mariscal, sin " +
+      "contar palabras genéricas como Hospital o Regional), con el ID, fecha de alta y " +
+      "último dato recibido de cada uno para decidir cuál conservar. También reporta IDs " +
+      "sin formato UUID estándar, que pueden romper la correspondencia con el " +
+      "sensorMspbsId de SIGGAM. Solo lectura: no modifica nada.",
     inputSchema: {},
     annotations: { readOnlyHint: true },
   },
   async () => {
-    const hospitals = await fetchHospitals();
-    const groups = {};
-    for (const h of hospitals) {
-      const key = `${normName(h.nombre)}|${normName(h.ciudad)}`;
-      (groups[key] ||= []).push(h);
+    const [hospitals, { rows, now }] = await Promise.all([fetchHospitals(), fetchLatestAll()]);
+    const latestById = {};
+    for (const r of rows) latestById[r.hospital_id] = r;
+
+    // Agrupa pares parecidos (unión transitiva)
+    const parent = hospitals.map((_, i) => i);
+    const root = (i) => (parent[i] === i ? i : (parent[i] = root(parent[i])));
+    for (let i = 0; i < hospitals.length; i++) {
+      for (let j = i + 1; j < hospitals.length; j++) {
+        if (similarHospitals(hospitals[i], hospitals[j])) parent[root(j)] = root(i);
+      }
     }
+    const groups = {};
+    hospitals.forEach((h, i) => (groups[root(i)] ||= []).push(h));
     const dups = Object.values(groups).filter((g) => g.length > 1);
     const badIds = hospitals.filter((h) => !UUID_RE.test(String(h.id).trim()));
 
     const lines = [`Hospitales registrados: ${hospitals.length}`];
     if (dups.length === 0) {
-      lines.push("Duplicados: ninguno.");
+      lines.push("Posibles duplicados: ninguno.");
     } else {
       lines.push(`Posibles duplicados (${dups.length} grupos):`);
       for (const g of dups) {
-        lines.push(`- ${g[0].nombre} (${g[0].ciudad || "sin ciudad"}):`);
-        for (const h of g) lines.push(`    id ${h.id} · creado ${h.created_at || "?"} · ${h.activo ? "activo" : "inactivo"}`);
+        lines.push(`- Grupo:`);
+        for (const h of g) {
+          const st = computeStatus(latestById[h.id], now);
+          const data = st.lastSeen ? `último dato ${st.lastSeen}` : "nunca recibió datos";
+          const map = h.lat != null && h.lon != null ? "con ubicación" : "sin ubicación";
+          lines.push(
+            `    "${h.nombre}" (${h.ciudad || "sin ciudad"}) · id ${h.id} · creado ${h.created_at || "?"} · ` +
+              `${h.activo ? "activo" : "inactivo"} · ${map} · ${data}`
+          );
+        }
       }
       lines.push(
-        "Para decidir cuál conservar: el que SIGGAM tenga como sensorMspbsId y al que envía datos el ESP32. " +
-          "Los otros se pueden desactivar o borrar desde el panel de administración."
+        "Para cada grupo, conservar el hospital cuyo id sea el sensorMspbsId de SIGGAM (y al que " +
+          "envían sus ESP32); pasarle nombre, ubicación y equipos del otro desde el panel, y " +
+          "desactivar el sobrante tras cambiar el HOSPITAL_ID de cualquier ESP32 que lo use."
       );
     }
     if (badIds.length === 0) {
@@ -300,6 +358,13 @@ server.registerTool(
       psa_enabled: z.boolean().optional().describe("La planta tiene generador PSA de O2. Por defecto true."),
       compressor_enabled: z.boolean().optional().describe("La planta tiene compresor de aire médico. Por defecto true."),
       vacuum_enabled: z.boolean().optional().describe("La planta tiene bomba de vacío. Por defecto true."),
+      confirm_different: z
+        .boolean()
+        .optional()
+        .describe(
+          "Solo true si el usuario confirmó que es un hospital distinto de los de nombre parecido " +
+            "que reportó un intento anterior."
+        ),
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
   },
@@ -333,6 +398,23 @@ server.registerTool(
           {
             type: "text",
             text: `Ya existe un hospital que coincide: ${dup.nombre} (${dup.ciudad || "sin ciudad"}), id ${dup.id}. No se creó nada.`,
+          },
+        ],
+        isError: true,
+      };
+    }
+    const similar = findSimilar(existing, { nombre: args.nombre, ciudad: args.ciudad });
+    if (similar.length && !args.confirm_different) {
+      return {
+        content: [
+          {
+            type: "text",
+            text:
+              "No se creó nada: ya hay hospitales con nombre parecido y podría ser el mismo " +
+              "(se duplicaría con otro ID y SIGGAM no los relacionaría):\n" +
+              similar.map((h) => `- ${h.nombre} (${h.ciudad || "sin ciudad"}), id ${h.id}`).join("\n") +
+              "\nSi es el mismo, usa ese hospital (su id es el HOSPITAL_ID). Si el usuario confirma " +
+              "que es otro hospital, repite con confirm_different: true.",
           },
         ],
         isError: true,
