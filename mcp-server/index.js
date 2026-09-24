@@ -328,6 +328,96 @@ server.registerTool(
 );
 
 server.registerTool(
+  "merge_hospitals",
+  {
+    title: "Fusionar un hospital duplicado en otro",
+    description:
+      "Resuelve un duplicado: conserva el hospital keep_id (debe ser el que tiene el " +
+      "sensorMspbsId de SIGGAM), le copia del duplicado lo que le falte (nombre completo, " +
+      "dirección, ubicación y, si se indica, umbrales y equipos) y desactiva el duplicado. " +
+      "No borra nada. Por defecto dry_run=true: solo muestra el plan; para aplicarlo hay " +
+      "que repetir con dry_run=false tras confirmarlo con el usuario. Requiere MSPYBS_ADMIN_TOKEN.",
+    inputSchema: {
+      keep_id: z.string().trim().min(1).describe("ID del hospital que se conserva (el sensorMspbsId de SIGGAM)."),
+      duplicate_id: z.string().trim().min(1).describe("ID del hospital duplicado que se desactiva."),
+      nombre: z.string().trim().min(1).optional().describe("Nombre final. Por defecto, el más largo de los dos."),
+      copy_config_from_duplicate: z
+        .boolean()
+        .optional()
+        .describe("Copiar umbrales y equipos del duplicado (si se configuraron allí). Por defecto true."),
+      dry_run: z.boolean().optional().describe("true (por defecto): solo mostrar el plan. false: aplicar."),
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+  },
+  async (args) => {
+    if (!ADMIN_TOKEN) {
+      return { content: [{ type: "text", text: "Falta MSPYBS_ADMIN_TOKEN en la configuración del servidor MCP." }], isError: true };
+    }
+    if (args.keep_id === args.duplicate_id) {
+      return { content: [{ type: "text", text: "keep_id y duplicate_id son el mismo hospital." }], isError: true };
+    }
+    const [hospitals, { rows, now }] = await Promise.all([fetchHospitals(), fetchLatestAll()]);
+    const keep = hospitals.find((h) => String(h.id).trim() === args.keep_id);
+    const dup = hospitals.find((h) => String(h.id).trim() === args.duplicate_id);
+    if (!keep || !dup) {
+      return {
+        content: [{ type: "text", text: `No se encontró ${!keep ? `keep_id ${args.keep_id}` : `duplicate_id ${args.duplicate_id}`}.` }],
+        isError: true,
+      };
+    }
+
+    const copyConfig = args.copy_config_from_duplicate !== false;
+    const nombre = args.nombre ?? (dup.nombre.trim().length > keep.nombre.trim().length ? dup.nombre.trim() : keep.nombre.trim());
+    const update = {
+      action: "update_hospital",
+      id: keep.id,
+      nombre,
+      ciudad: keep.ciudad || dup.ciudad,
+      direccion: keep.direccion || dup.direccion,
+      activo: true,
+      thresholds: copyConfig ? dup.thresholds : keep.thresholds,
+      equipment: copyConfig ? dup.equipment : keep.equipment,
+    };
+    const lat = keep.lat ?? dup.lat, lon = keep.lon ?? dup.lon;
+    if (lat != null && lon != null) { update.lat = lat; update.lon = lon; }
+
+    const dupLatest = rows.find((r) => r.hospital_id === dup.id);
+    const dupStatus = computeStatus(dupLatest, now);
+    const plan = [
+      `Conservar: ${keep.nombre} (${keep.ciudad || "sin ciudad"}) · id ${keep.id}`,
+      `  nombre → "${update.nombre}"`,
+      `  ciudad → "${update.ciudad || ""}" · dirección → "${update.direccion || ""}"`,
+      `  ubicación → ${update.lat != null ? `${update.lat}, ${update.lon}` : "sin ubicación"}`,
+      `  umbrales y equipos → del ${copyConfig ? "duplicado" : "hospital conservado"} ` +
+        `(PSA ${update.equipment?.psa_enabled !== false ? "sí" : "no"}, compresor ${update.equipment?.compressor_enabled !== false ? "sí" : "no"}, vacío ${update.equipment?.vacuum_enabled !== false ? "sí" : "no"})`,
+      `Desactivar: ${dup.nombre} (${dup.ciudad || "sin ciudad"}) · id ${dup.id} (no se borra)`,
+    ];
+    if (dupStatus.lastSeen) {
+      plan.push(
+        `⚠ El duplicado recibió datos (último ${dupStatus.lastSeen}, hace ${dupStatus.ageSeconds}s): ` +
+          `cambia el HOSPITAL_ID de ese ESP32 a ${keep.id} o sus lecturas quedarán en el hospital desactivado.`
+      );
+    }
+    plan.push(`SIGGAM debe tener ${keep.id} como sensorMspbsId de esta planta.`);
+
+    if (args.dry_run !== false) {
+      return { content: [{ type: "text", text: ["PLAN (no se modificó nada):", ...plan, "Para aplicarlo, repetir con dry_run: false."].join("\n") }] };
+    }
+
+    await apiPost(update);
+    try {
+      await apiPost({ action: "toggle_hospital", id: dup.id, activo: false });
+    } catch (e) {
+      return {
+        content: [{ type: "text", text: `Se actualizó ${keep.id}, pero no se pudo desactivar ${dup.id}: ${e.message}. Desactívalo desde el panel.` }],
+        isError: true,
+      };
+    }
+    return { content: [{ type: "text", text: ["HECHO:", ...plan].join("\n") }] };
+  }
+);
+
+server.registerTool(
   "create_hospital",
   {
     title: "Crear hospital",

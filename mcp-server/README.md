@@ -22,6 +22,13 @@ desplegado (`backend/google-apps-script.js`), consultando las acciones
   "Hospital" o "Regional"), con el ID, la fecha de alta y el último dato de
   cada uno para decidir cuál conservar. También lista los IDs sin formato UUID
   estándar que conviene confirmar con SIGGAM.
+- **`merge_hospitals`** — resuelve un duplicado: conserva `keep_id` (el que
+  tiene el `sensorMspbsId` de SIGGAM), le copia del duplicado el nombre
+  completo, dirección, ubicación y, por defecto, umbrales y equipos, y
+  desactiva el duplicado (nunca lo borra). Primero muestra el plan sin
+  modificar nada; solo aplica con `dry_run: false`. Avisa si el duplicado
+  recibía datos de algún ESP32, que habrá que reconfigurar. Requiere
+  `MSPYBS_ADMIN_TOKEN`.
 - **`create_hospital`** — da de alta un hospital (nombre, ciudad, dirección,
   ubicación, umbrales de pureza O₂ y equipos presentes). Devuelve el ID, que
   es el `HOSPITAL_ID` del firmware del ESP32. No crea nada si ya existe un
