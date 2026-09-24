@@ -17,6 +17,7 @@ const COLS = [
   { key: 'o2_flow_m3h',          label: 'Caudal O₂ (m³/h)',    fmt: (v: unknown) => Number(v).toFixed(2) },
   { key: 'tower_a_pressure_bar', label: 'Presión Torre A (bar)',fmt: (v: unknown) => Number(v).toFixed(2) },
   { key: 'tower_b_pressure_bar', label: 'Presión Torre B (bar)',fmt: (v: unknown) => Number(v).toFixed(2) },
+  { key: 'tower_pressure_source', label: 'Origen torres',        fmt: (v: unknown) => (v === 'estimated' ? 'Estimada' : v === 'measured' ? 'Sensor' : '—') },
   { key: 'o2_tank_pressure_bar', label: 'Tanque O₂ (bar)',      fmt: (v: unknown) => Number(v).toFixed(2) },
   { key: 'psa_dewpoint_c',       label: 'Dew Point PSA (°C)',   fmt: (v: unknown) => Number(v).toFixed(1) },
   { key: 'air_line_pressure_bar',label: 'Presión Aire (bar)',   fmt: (v: unknown) => Number(v).toFixed(2) },

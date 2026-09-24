@@ -100,6 +100,36 @@ unsigned long  lastSendTime = 0;
 DatosPLC       ultimo;
 bool           hayDatos = false;
 
+// ── PRESIÓN DE TORRES A/B ESTIMADA ──────────────────────────
+// El PLC BOGE no publica la presión de cada torre. Hasta instalar sensores
+// se estima con la posición de válvulas (sinóptico, manual pág. 11) y la
+// presión real de entrada de aire (PT-02). Se envía marcada como
+// "estimated"; con sensores reales, cambiar TOWER_SOURCE a "measured" y
+// asignar la lectura del sensor en lugar de estimarTorres().
+const char* TOWER_SOURCE   = "estimated";
+const double P_VENT_BAR    = 0.1;   // torre descargando al silenciador
+enum Valvula : uint8_t {           // índice en DatosPLC::valvulas
+  V_POV101 = 0,  // entrada aire → torre A
+  V_POV102 = 1,  // entrada aire → torre B
+  V_POV103 = 2,  // escape torre A
+  V_POV104 = 3,  // escape torre B
+  V_POV105_106 = 4,  // ecualización entre torres
+};
+double torreA = -1, torreB = -1;   // -1 = aún sin estimar
+
+double estimarTorre(double actual, bool entrada, bool escape, bool ecualiza, double pEntrada) {
+  if (entrada)  return pEntrada;
+  if (escape)   return P_VENT_BAR;
+  if (ecualiza) return pEntrada / 2.0;
+  return actual;  // todas cerradas: la torre conserva su presión
+}
+
+void estimarTorres(const DatosPLC& d) {
+  bool eq = d.valvulas[V_POV105_106];
+  torreA = estimarTorre(torreA, d.valvulas[V_POV101], d.valvulas[V_POV103], eq, d.presAire);
+  torreB = estimarTorre(torreB, d.valvulas[V_POV102], d.valvulas[V_POV104], eq, d.presAire);
+}
+
 // ============================================================
 void setup() {
   Serial.begin(115200);
@@ -137,6 +167,7 @@ void loop() {
   bool online = leerPLC(d);
   if (online) {
     ultimo = d;
+    estimarTorres(d);
     hayDatos = true;
     imprimirDatos(d);
   } else {
@@ -351,6 +382,12 @@ void sendData(bool online) {
     JsonArray valves = doc.createNestedArray("plc_valves");
     for (int i = 0; i < 9; i++) valves.add(d.valvulas[i]);
     doc["plc_life_bit"]                = d.lifeBit;
+
+    if (torreA >= 0 && torreB >= 0) {
+      doc["tower_a_pressure_bar"]  = round(torreA * 100) / 100.0;
+      doc["tower_b_pressure_bar"]  = round(torreB * 100) / 100.0;
+      doc["tower_pressure_source"] = TOWER_SOURCE;
+    }
   }
 
   String jsonBody;

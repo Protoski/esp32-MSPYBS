@@ -89,7 +89,10 @@ const PLC_JSON_FIELDS = ['plc_alarms_ack', 'plc_valves'];
 // equipos antiguos, que cuentan como un único equipo de todos los tipos.
 const UNIT_FIELDS = ['unit_id', 'unit_type'];
 const UNIT_TYPES = ['o2', 'air', 'vacuum'];
-const EXTRA_FIELDS = PLC_FIELDS.concat(UNIT_FIELDS);
+// Origen de tower_a/b_pressure_bar: "measured" (sensor) o "estimated"
+// (calculada con las válvulas del PLC). Vacío en equipos antiguos = medida.
+const TOWER_SOURCES = ['measured', 'estimated'];
+const EXTRA_FIELDS = PLC_FIELDS.concat(UNIT_FIELDS, ['tower_pressure_source']);
 const DATA_COLS = LEGACY_COLS + EXTRA_FIELDS.length;
 const ONLINE_MS = 60000;
 
@@ -111,6 +114,10 @@ function extraCell_(body, key) {
   if (key === 'unit_type') {
     v = String(v).trim().toLowerCase();
     return UNIT_TYPES.indexOf(v) !== -1 ? v : '';
+  }
+  if (key === 'tower_pressure_source') {
+    v = String(v).trim().toLowerCase();
+    return TOWER_SOURCES.indexOf(v) !== -1 ? v : '';
   }
   if (PLC_JSON_FIELDS.indexOf(key) !== -1) return JSON.stringify(v);
   return v;
@@ -224,8 +231,8 @@ function summarizeUnits_(units, nowMs) {
     var rep = producing.length
       ? worst_(producing, function(a, b) { return Number(a.o2_purity_pct) - Number(b.o2_purity_pct); })
       : worst_(o2, function(a, b) { return String(b.timestamp).localeCompare(String(a.timestamp)); });
-    ['o2_purity_pct', 'tower_a_pressure_bar', 'tower_b_pressure_bar', 'o2_tank_pressure_bar',
-     'psa_dewpoint_c'].concat(PLC_FIELDS).forEach(function(k) { s[k] = rep[k]; });
+    ['o2_purity_pct', 'tower_a_pressure_bar', 'tower_b_pressure_bar', 'tower_pressure_source',
+     'o2_tank_pressure_bar', 'psa_dewpoint_c'].concat(PLC_FIELDS).forEach(function(k) { s[k] = rep[k]; });
     s.o2_flow_m3h = o2.reduce(function(t, u) { return t + (Number(u.o2_flow_m3h) || 0); }, 0);
   }
 

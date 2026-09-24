@@ -68,6 +68,7 @@ export default function HospitalDashboard() {
   const show = (type: 'o2' | 'air' | 'vacuum') => enabled[type] && (!multi || !rawLatest || unitHasType(rawLatest, type));
   // Plantas con PLC BOGE: no tienen torres PSA; se muestran los datos del PLC
   const hasPlc = rawLatest?.plc_online != null;
+  const towersEstimated = rawLatest?.tower_pressure_source === 'estimated';
 
   const latest = unitOnline ? rawLatest : undefined;
   const last50 = unitOnline ? unitRows.slice(-50) : [];
@@ -148,6 +149,10 @@ export default function HospitalDashboard() {
             <KPICard label="Temp. entrada aire" value={n(latest?.plc_air_inlet_temp_c ?? undefined, 1)} unit="°C" status={latest ? 'info' : 'neutral'} />
             <KPICard label="Horas generador" value={n(latest?.plc_service_hours_total ?? undefined, 0)} unit="h" status={latest ? 'info' : 'neutral'} />
             <KPICard label="Flujo total" value={n(latest?.plc_flow_total_nm3 ?? undefined, 0)} unit="Nm³" status={latest ? 'info' : 'neutral'} />
+            {towersEstimated && <>
+              <KPICard label="Torre A (estimada)" value={n(latest?.tower_a_pressure_bar)} unit="bar" status={latest ? 'info' : 'neutral'} sublabel="Calculada con válvulas, sin sensor" />
+              <KPICard label="Torre B (estimada)" value={n(latest?.tower_b_pressure_bar)} unit="bar" status={latest ? 'info' : 'neutral'} sublabel="Calculada con válvulas, sin sensor" />
+            </>}
           </>) : (<>
             <KPICard label="Presión Torre A" value={n(latest?.tower_a_pressure_bar)} unit="bar" status={latest ? rangeStatus(latest.tower_a_pressure_bar, 0.2, 6) : 'neutral'} sublabel="Ciclo PSA" />
             <KPICard label="Presión Torre B" value={n(latest?.tower_b_pressure_bar)} unit="bar" status={latest ? rangeStatus(latest.tower_b_pressure_bar, 0.2, 6) : 'neutral'} sublabel="Ciclo PSA" />
@@ -160,6 +165,10 @@ export default function HospitalDashboard() {
               series={[
                 { label: 'Gas producto', data: last50.map(r => r.plc_gas_pressure_barg ?? 0), borderColor: '#38bdf8', bgColor: 'rgba(56,189,248,0.06)' },
                 { label: 'Entrada aire', data: last50.map(r => r.plc_air_inlet_pressure_barg ?? 0), borderColor: '#a78bfa', bgColor: 'rgba(167,139,250,0.06)' },
+                ...(towersEstimated ? [
+                  { label: 'Torre A (est.)', data: last50.map(r => r.tower_a_pressure_bar), borderColor: '#22c55e', bgColor: 'rgba(34,197,94,0.04)' },
+                  { label: 'Torre B (est.)', data: last50.map(r => r.tower_b_pressure_bar), borderColor: '#f59e0b', bgColor: 'rgba(245,158,11,0.04)' },
+                ] : []),
               ]} />
           ) : (
             <TimeSeriesChart title="Presión Torres PSA (bar)" labels={labels} yUnit="bar" yMin={0} yMax={7}

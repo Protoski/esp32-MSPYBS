@@ -32,6 +32,11 @@ Servidor MCP (mcp-server/) <-- Claude Code local del usuario
   S7-1200 596.1430.04, págs. 42 y 51-55). Contadores de 32 bits con la fórmula de
   BOGE `UR*32768+LR`; alarmas y fallos como máscara `(UR<<16)|LR`.
 - Diagnóstico de cableado SPI: `esp32/diagnostico_enc28j60/`.
+- El PLC no publica la presión de las torres A/B. El firmware la **estima** con
+  las válvulas (sinóptico del manual, pág. 11: POV-101/102 entrada A/B,
+  POV-103/104 escape A/B, POV-105/106 ecualización) y PT-02, y la envía con
+  `tower_pressure_source: "estimated"`. Al instalar sensores: `TOWER_SOURCE =
+  "measured"` y asignar la lectura real. Confirmar el mapeo de válvulas con BOGE.
 
 ## Firmware
 
@@ -109,5 +114,6 @@ dirección y coordenadas.
 - Borrar de `Registros` las filas de prueba guardadas con el id de Itauguá.
 - Cargar el id de Luque en SIGGAM y confirmar el de Mcal. Estigarribia.
 - Archivar la implementación antigua de Apps Script sin token.
+- Instalar sensores de presión en las torres A/B y pasar a `"measured"`.
 - Valorar cambiar el `HOSPITAL_ID` por defecto del firmware por un valor de
   ejemplo para no enviar por error a Itauguá.

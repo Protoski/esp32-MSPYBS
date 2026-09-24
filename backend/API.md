@@ -233,6 +233,24 @@ Con el generador detenido o en espera, los valores de pureza y caudal en 0 son
 normales: evalúa la pureza contra los umbrales solo cuando
 `plc_plant_state == 1` y `plc_online == true`.
 
+## Presión de torres estimada (`tower_pressure_source`)
+
+El PLC BOGE no publica la presión de cada torre PSA. Hasta instalar sensores,
+el firmware la **estima** a partir de la posición de las válvulas
+(`plc_valves`) y la presión real de entrada de aire (`plc_air_inlet_pressure_barg`):
+
+| Válvulas abiertas | Torre A | Torre B |
+|---|---|---|
+| POV-101 (entrada A) + POV-104 (escape B) | presión de entrada | ≈ 0,1 bar |
+| POV-102 (entrada B) + POV-103 (escape A) | ≈ 0,1 bar | presión de entrada |
+| POV-105/106 (ecualización) | ≈ la mitad | ≈ la mitad |
+| Todas cerradas | mantiene el último valor | mantiene el último valor |
+
+`tower_pressure_source` indica el origen de `tower_a_pressure_bar` y
+`tower_b_pressure_bar`: `"estimated"` (calculada, **no es una medición**) o
+`"measured"` (sensor). `null` en equipos antiguos, que miden con sensores.
+No uses valores estimados para alarmas ni informes de cumplimiento.
+
 ## Identificadores de planta y SIGGAM
 
 - El `id` de cada planta (`hospital_id` en las lecturas) es el mismo texto que

@@ -42,6 +42,9 @@ export interface PlantRow {
   // Equipo dentro del hospital (null en equipos antiguos = único equipo)
   unit_id?:   string | null;
   unit_type?: UnitType | null;
+  // Origen de tower_a/b_pressure_bar: medida por sensor o estimada con las
+  // válvulas del PLC (null en equipos antiguos = medida)
+  tower_pressure_source?: 'measured' | 'estimated' | null;
   // Solo en latest_all: la fila es el resumen del hospital y aquí va la
   // última lectura de cada equipo
   units?:     PlantRow[];
