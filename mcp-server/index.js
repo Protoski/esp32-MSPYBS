@@ -328,6 +328,48 @@ server.registerTool(
 );
 
 server.registerTool(
+  "set_hospital_equipment",
+  {
+    title: "Configurar equipos de un hospital",
+    description:
+      "Activa o desactiva qué equipos tiene un hospital (planta PSA de O2, compresor de aire, " +
+      "bomba de vacío). El dashboard solo genera alarmas de los equipos activos. Úsala al " +
+      "instalar el primer ESP32 de un tipo nuevo (p. ej. el primer VAC-1 activa el vacío). " +
+      "Por defecto dry_run=true: solo muestra el cambio. Requiere MSPYBS_ADMIN_TOKEN.",
+    inputSchema: {
+      hospital_id: z.string().trim().min(1).describe("ID del hospital."),
+      psa_enabled: z.boolean().optional().describe("Tiene planta PSA de oxígeno."),
+      compressor_enabled: z.boolean().optional().describe("Tiene compresor de aire medicinal."),
+      vacuum_enabled: z.boolean().optional().describe("Tiene bomba de vacío."),
+      dry_run: z.boolean().optional().describe("true (por defecto): solo mostrar. false: aplicar."),
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+  },
+  async (args) => {
+    if (!ADMIN_TOKEN) {
+      return { content: [{ type: "text", text: "Falta MSPYBS_ADMIN_TOKEN en la configuración del servidor MCP." }], isError: true };
+    }
+    const hospitals = await fetchHospitals();
+    const h = hospitals.find((x) => String(x.id).trim() === args.hospital_id);
+    if (!h) {
+      return { content: [{ type: "text", text: `No se encontró el hospital ${args.hospital_id}.` }], isError: true };
+    }
+    const cur = { psa_enabled: true, compressor_enabled: true, vacuum_enabled: true, ...(h.equipment || {}) };
+    const next = { ...cur };
+    for (const k of ["psa_enabled", "compressor_enabled", "vacuum_enabled"]) {
+      if (args[k] !== undefined) next[k] = args[k];
+    }
+    const fmt = (e) => `PSA ${e.psa_enabled !== false ? "sí" : "no"}, compresor ${e.compressor_enabled !== false ? "sí" : "no"}, vacío ${e.vacuum_enabled !== false ? "sí" : "no"}`;
+    const text = [`${h.nombre} (${h.ciudad || "sin ciudad"}) · id ${h.id}`, `  antes:   ${fmt(cur)}`, `  después: ${fmt(next)}`];
+    if (args.dry_run !== false) {
+      return { content: [{ type: "text", text: ["PLAN (no se modificó nada):", ...text, "Para aplicarlo, repetir con dry_run: false."].join("\n") }] };
+    }
+    await apiPost({ action: "update_hospital", id: h.id, equipment: next });
+    return { content: [{ type: "text", text: ["HECHO:", ...text].join("\n") }] };
+  }
+);
+
+server.registerTool(
   "merge_hospitals",
   {
     title: "Fusionar un hospital duplicado en otro",

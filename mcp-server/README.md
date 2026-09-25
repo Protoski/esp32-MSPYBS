@@ -29,6 +29,9 @@ desplegado (`backend/google-apps-script.js`), consultando las acciones
   modificar nada; solo aplica con `dry_run: false`. Avisa si el duplicado
   recibía datos de algún ESP32, que habrá que reconfigurar. Requiere
   `MSPYBS_ADMIN_TOKEN`.
+- **`set_hospital_equipment`** — activa o desactiva qué equipos tiene un hospital
+  (planta PSA, compresor, vacío), para que el dashboard evalúe sus alarmas. Muestra
+  el cambio sin aplicarlo salvo `dry_run: false`. Requiere `MSPYBS_ADMIN_TOKEN`.
 - **`create_hospital`** — da de alta un hospital (nombre, ciudad, dirección,
   ubicación, umbrales de pureza O₂ y equipos presentes). Devuelve el ID, que
   es el `HOSPITAL_ID` del firmware del ESP32. No crea nada si ya existe un

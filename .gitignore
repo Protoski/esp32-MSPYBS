@@ -12,6 +12,7 @@ frontend/.env.production.local
 
 # Credenciales WiFi del firmware
 esp32/secrets.h
+esp32/equipo.h
 
 # Logs
 *.log

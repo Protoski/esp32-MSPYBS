@@ -34,11 +34,17 @@
 // de secrets.example.h (no se sube al repositorio)
 #include "secrets.h"
 
-const char* HOSPITAL_ID = "247957b8-c92e-44f7-8858-819515a14731";
-// Equipo dentro del hospital: cada planta de O2 con su propio ESP32 lleva un
-// UNIT_ID distinto (O2-1, O2-2...). Mismo HOSPITAL_ID en todos.
-const char* UNIT_ID     = "O2-1";
-const char* UNIT_TYPE   = "o2";
+// HOSPITAL_ID, UNIT_ID, UNIT_TYPE y la red de este equipo: crea equipo.h a
+// partir de equipo.example.h (o con tools/equipos/equipos.py). Sin él no
+// compila, para que ningún ESP32 envíe con el ID de otro hospital.
+#include "equipo.h"
+
+#ifndef ETH_IP_LAST_OCTET
+#define ETH_IP_LAST_OCTET 50   // IP del ESP32 en la red del PLC: 100.100.200.50
+#endif
+#ifndef PLC_IP_LAST_OCTET
+#define PLC_IP_LAST_OCTET 10   // IP del PLC BOGE de fábrica: 100.100.200.10
+#endif
 
 const unsigned long SEND_INTERVAL_MS = 5000;
 
@@ -48,13 +54,15 @@ const int PIN_ETH_RST = 27;
 
 // Red del PLC (sin DHCP). .1 = punto de acceso BOGE opcional,
 // .10 = PLC, .100+ = rango DHCP del punto de acceso.
-byte      ETH_MAC[]  = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
-IPAddress ETH_IP     (100, 100, 200, 50);
+// La MAC se deriva del chip en setup(): única por ESP32 aunque varios
+// equipos compartan switch.
+byte      ETH_MAC[6];
+IPAddress ETH_IP     (100, 100, 200, ETH_IP_LAST_OCTET);
 IPAddress ETH_MASK   (255, 255, 255, 0);
 IPAddress ETH_GW     (100, 100, 200, 1);
 
 // ── MODBUS TCP ──────────────────────────────────────────────
-IPAddress      PLC_IP   (100, 100, 200, 10);
+IPAddress      PLC_IP   (100, 100, 200, PLC_IP_LAST_OCTET);
 const uint16_t PLC_PORT = 501;   // 500 + dirección de esclavo
 const uint8_t  PLC_UNIT = 1;
 
@@ -130,6 +138,13 @@ void estimarTorres(const DatosPLC& d) {
   torreB = estimarTorre(torreB, d.valvulas[V_POV102], d.valvulas[V_POV104], eq, d.presAire);
 }
 
+// MAC del chip (eFuse) con el bit de "administrada localmente" y unicast
+void macDesdeChip() {
+  uint64_t chip = ESP.getEfuseMac();
+  for (int i = 0; i < 6; i++) ETH_MAC[i] = (chip >> (8 * i)) & 0xFF;
+  ETH_MAC[0] = (ETH_MAC[0] | 0x02) & 0xFE;
+}
+
 // ============================================================
 void setup() {
   Serial.begin(115200);
@@ -143,6 +158,10 @@ void setup() {
   delay(200);
 
   Ethernet.init(PIN_ETH_CS);
+  macDesdeChip();
+  Serial.printf("[EQUIPO] Hospital %s · unidad %s (%s) · MAC ETH %02X:%02X:%02X:%02X:%02X:%02X\n",
+                HOSPITAL_ID, UNIT_ID, UNIT_TYPE,
+                ETH_MAC[0], ETH_MAC[1], ETH_MAC[2], ETH_MAC[3], ETH_MAC[4], ETH_MAC[5]);
   Ethernet.begin(ETH_MAC, ETH_IP, ETH_GW, ETH_GW, ETH_MASK);
   Serial.printf("[ETH] IP local: %s  (PLC: %s:%u)\n",
                 Ethernet.localIP().toString().c_str(),

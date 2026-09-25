@@ -131,16 +131,24 @@ git push origin main
 
 ### Paso 5: Configurar el ESP32
 
-1. Copia `esp32/secrets.example.h` como `esp32/secrets.h` y completa: red Wi-Fi,
+**Forma recomendada:** en Claude Code (en tu PC, con el ESP32 por USB) usa el skill
+`/nuevo-equipo`, o directamente `python3 tools/equipos/equipos.py`: busca o crea el
+hospital, genera la carpeta del equipo, sube el firmware y verifica que envía datos.
+
+Forma manual:
+
+1. Copia `esp32/equipo.example.h` como `equipo.h` y completa `HOSPITAL_ID` (el
+   `sensorMspbsId` de SIGGAM), `UNIT_ID` y `UNIT_TYPE`.
+2. Copia `esp32/secrets.example.h` como `esp32/secrets.h` y completa: red Wi-Fi,
    `API_URL` (el mismo valor que `NEXT_PUBLIC_API_URL` en Vercel) y `DEVICE_TOKEN`
    (Apps Script → Configuración del proyecto → Propiedades del script). `secrets.h` está en
    `.gitignore` y no se sube al repositorio.
-2. El firmware lee el PLC S7-1200 del generador BOGE por Modbus TCP a través de un módulo
+3. El firmware lee el PLC S7-1200 del generador BOGE por Modbus TCP a través de un módulo
    ENC28J60 (IP del ESP32 en la LAN: `100.100.200.50`; PLC: `100.100.200.10:501`) y envía
    los datos por WiFi.
-3. Instala las librerías desde el Gestor de Librerías: **EthernetENC** (Juraj Andrassy) y
+4. Instala las librerías desde el Gestor de Librerías: **EthernetENC** (Juraj Andrassy) y
    **ArduinoJson** ≥ 6.x (Benoit Blanchon).
-4. Abre `plant_monitor.ino` (con `secrets.h` en la misma carpeta), selecciona la placa
+5. Abre `plant_monitor.ino` (con `equipo.h` y `secrets.h` en la misma carpeta), selecciona la placa
    **ESP32 Dev Module** y sube el firmware.
 
 ---

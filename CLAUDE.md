@@ -44,11 +44,30 @@ Servidor MCP (mcp-server/) <-- Claude Code local del usuario
   originales más el contrato `plc_*` (mismo que `esp32/micropython/`), `unit_id`,
   `unit_type` y `token`. Si el PLC no responde envía `plc_online:false` con el
   último dato válido; nunca inventa ceros.
-- `HOSPITAL_ID`, `UNIT_ID`, `UNIT_TYPE` están en el `.ino`; WiFi, `API_URL` y
-  `DEVICE_TOKEN` en `secrets.h` (ignorado por git, plantilla `secrets.example.h`).
+- Configuración por equipo en `equipo.h` (`HOSPITAL_ID`, `UNIT_ID`, `UNIT_TYPE`,
+  `ETH_IP_LAST_OCTET`, `PLC_IP_LAST_OCTET`; plantilla `equipo.example.h`); sin él no
+  compila. WiFi, `API_URL` y `DEVICE_TOKEN` en `secrets.h`. Ambos ignorados por git.
+  La MAC del ENC28J60 se deriva del chip (única por ESP32).
 - Arduino compila todos los `.ino` de una carpeta: **una carpeta por ESP32**, con un
-  solo `.ino` del mismo nombre que la carpeta más su `secrets.h`
-  (p. ej. `~/Escritorio/luque_O2_1/luque_O2_1.ino`).
+  solo `.ino` (copia idéntica de `plant_monitor.ino`) del mismo nombre que la
+  carpeta, más `equipo.h` y `secrets.h`.
+- Solo **BOGE** tiene perfil de PLC. Plantas de **otras marcas**, compresores y
+  vacío se monitorean con el ESP32 de **sensores 4-20 mA** (`esp32/micropython/`,
+  requiere W5500 si además lee un PLC). Para otra marca con PLC se puede añadir
+  un perfil con el mapa Modbus del fabricante.
+- ⚠ El firmware MicroPython envía un **valor simulado** si falla la lectura de un
+  sensor (`main.py`, "uso valor simulado"); `equipos.py verificar` lo avisa.
+
+## Alta de equipos (skill `/nuevo-equipo`)
+
+Usar el skill `.claude/skills/nuevo-equipo/` desde el Claude Code local del
+usuario. Motor: `tools/equipos/equipos.py` (check, config-global, wifi, importar,
+estado, siguiente-unidad, generar-plc, generar-sensores, subir, actualizar,
+verificar, inventario). Configuración local en `~/.config/mspybs/` (permisos 600):
+`global.env` (API_URL, DEVICE_TOKEN), `wifi/<hospital_id>.env` y el inventario
+`equipos.json`. Las carpetas de equipos se generan en `~/Escritorio/equipos/`. Los
+secretos los ingresa el usuario con `! python3 tools/equipos/equipos.py ...`
+(entrada oculta), nunca por el chat.
 - Monitor serie a 115200. La placa se flashea desde el PC del usuario (Arduino IDE
   o arduino-cli con Claude Code local); la sesión en la nube no tiene USB.
 
@@ -85,7 +104,8 @@ Servidor MCP (mcp-server/) <-- Claude Code local del usuario
 Herramientas: `list_plants_status`, `get_plant_status`, `check_hospitals`
 (duplicados por nombre parecido e IDs dudosos), `create_hospital` (bloquea
 nombres parecidos salvo `confirm_different`), `merge_hospitals` (dry run por
-defecto; conserva uno y desactiva el otro, nunca borra). Variables
+defecto; conserva uno y desactiva el otro, nunca borra), `set_hospital_equipment`
+(activa PSA/compresor/vacío de un hospital; dry run por defecto). Variables
 `MSPYBS_API_URL` y `MSPYBS_ADMIN_TOKEN` en la config local del cliente. En
 Claude Code usar Sonnet si Opus da falsos positivos de seguridad.
 
@@ -115,5 +135,6 @@ dirección y coordenadas.
 - Cargar el id de Luque en SIGGAM y confirmar el de Mcal. Estigarribia.
 - Archivar la implementación antigua de Apps Script sin token.
 - Instalar sensores de presión en las torres A/B y pasar a `"measured"`.
-- Valorar cambiar el `HOSPITAL_ID` por defecto del firmware por un valor de
-  ejemplo para no enviar por error a Itauguá.
+- Regenerar con `/nuevo-equipo` (o `equipos.py generar-plc --reemplazar`) la
+  carpeta de Luque O2-1, que es anterior a `equipo.h`.
+- Revisar el valor simulado del firmware MicroPython ante fallos de lectura.

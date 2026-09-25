@@ -1,7 +1,13 @@
 # Firmware MicroPython — Monitor de Planta
 
-Firmware vigente del ESP32. Reemplaza a `../plant_monitor.ino` (que era un
-simulador con credenciales hardcodeadas y quedó solo como referencia).
+Firmware del ESP32 de **sensores 4-20 mA** (sirve para plantas de cualquier
+marca, compresores y bombas de vacío). Es complementario a `../plant_monitor.ino`,
+la pasarela Arduino que lee el PLC de las plantas BOGE con un módulo ENC28J60.
+Para leer además un PLC BOGE desde este firmware hace falta un módulo **W5500**:
+MicroPython no soporta el ENC28J60.
+
+Para generar la configuración, subir y verificar un equipo usar el skill
+`/nuevo-equipo` o `tools/equipos/equipos.py generar-sensores`.
 
 ## Arquitectura de datos
 
