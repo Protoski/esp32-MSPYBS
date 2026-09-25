@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="api-token" content="__TOKEN__">
+<title>MSPYBS · Equipos ESP32</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <img src="/logo-mspbs.jpg" alt="Ministerio de Salud Pública y Bienestar Social" class="logo">
+    <div>
+      <div class="brand-title">Equipos ESP32</div>
+      <div class="brand-sub">Alta de hospitales y programación</div>
+    </div>
+  </div>
+  <nav class="tabs" id="tabs">
+    <button data-tab="inicio" class="active">Inicio</button>
+    <button data-tab="config">Configuración</button>
+    <button data-tab="hospitales">Hospitales</button>
+    <button data-tab="equipos">Equipos</button>
+    <button data-tab="registro">Registro <span id="job-dot" class="dot hidden"></span></button>
+  </nav>
+</header>
+
+<main>
+  <div id="toast" class="toast hidden"></div>
+
+  <!-- INICIO -->
+  <section id="tab-inicio" class="tab active">
+    <h1>Inicio</h1>
+    <p class="muted">Estado de las herramientas de tu PC, los puertos USB y la configuración.</p>
+    <div class="grid3">
+      <div class="card">
+        <h2>Herramientas</h2>
+        <ul id="check-list" class="checks"><li class="muted">Revisando…</li></ul>
+        <div class="row">
+          <button id="btn-instalar" class="primary">Instalar lo que falta</button>
+          <label class="inline"><input type="checkbox" id="chk-sensores"> incluir MicroPython (sensores)</label>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Puertos USB</h2>
+        <ul id="ports-list" class="checks"><li class="muted">Buscando…</li></ul>
+        <p id="ports-perm" class="warn hidden">Sin permiso sobre el puerto. En una terminal ejecuta
+          <code>sudo usermod -aG dialout $USER</code> y vuelve a iniciar sesión.</p>
+        <button id="btn-refresh-ports">Volver a buscar</button>
+      </div>
+      <div class="card">
+        <h2>Configuración</h2>
+        <ul id="config-list" class="checks"><li class="muted">…</li></ul>
+        <div class="row">
+          <button data-goto="config">Configurar</button>
+          <button id="btn-acceso">Crear acceso directo</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CONFIGURACIÓN -->
+  <section id="tab-config" class="tab">
+    <h1>Configuración</h1>
+    <p class="muted">Se guarda solo en tu PC (<code id="cfg-dir">~/.config/mspybs</code>, permisos 600). Los tokens no se vuelven a mostrar.</p>
+    <div class="grid2">
+      <form id="form-config" class="card">
+        <h2>Backend y tokens</h2>
+        <label>URL del backend <small>(NEXT_PUBLIC_API_URL de Vercel, termina en /exec)</small>
+          <input name="api_url" id="cfg-url" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off"></label>
+        <label>DEVICE_TOKEN <small id="st-device"></small>
+          <input name="device_token" type="password" autocomplete="new-password" placeholder="dejar vacío para no cambiarlo"></label>
+        <label>ADMIN_TOKEN <small id="st-admin"></small>
+          <input name="admin_token" type="password" autocomplete="new-password" placeholder="dejar vacío para no cambiarlo"></label>
+        <p class="muted small">DEVICE_TOKEN y ADMIN_TOKEN están en Apps Script → Configuración del proyecto → Propiedades de secuencia de comandos.</p>
+        <button class="primary">Guardar</button>
+      </form>
+      <div class="stack">
+        <form id="form-importar" class="card">
+          <h2>Importar un secrets.h que ya funciona</h2>
+          <label>Ruta del archivo
+            <input name="desde" placeholder="/home/usuario/Escritorio/luque_O2_1/secrets.h"></label>
+          <label>Hospital de ese WiFi <small>(opcional)</small>
+            <select name="hospital_id" class="sel-hospital"><option value="">—</option></select></label>
+          <button>Importar</button>
+        </form>
+        <form id="form-mpy" class="card">
+          <h2>Firmware MicroPython (equipos de sensores)</h2>
+          <p class="muted small">Descarga el .bin <b>ESP32_GENERIC</b> de
+            <a href="https://micropython.org/download/ESP32_GENERIC/" target="_blank" rel="noopener">micropython.org</a> e indica su ruta.
+            Actual: <span id="mpy-actual">ninguno</span></p>
+          <label>Ruta del .bin <input name="desde" placeholder="/home/usuario/Descargas/ESP32_GENERIC-v1.24.bin"></label>
+          <button>Guardar</button>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOSPITALES -->
+  <section id="tab-hospitales" class="tab">
+    <h1>Hospitales</h1>
+    <div class="toolbar">
+      <input id="h-buscar" placeholder="Buscar por nombre, ciudad o id…">
+      <button id="btn-h-nuevo" class="primary">+ Nuevo hospital</button>
+      <button id="btn-h-dups">Revisar duplicados</button>
+      <button id="btn-h-refresh">Actualizar</button>
+    </div>
+    <div id="dups" class="card hidden"></div>
+
+    <form id="form-hospital" class="card hidden">
+      <h2>Nuevo hospital</h2>
+      <div class="grid2">
+        <div class="stack">
+          <label>Nombre <input name="nombre" required placeholder="Hospital General de …"></label>
+          <div class="grid2 tight">
+            <label>Ciudad <input name="ciudad"></label>
+            <label>ID de SIGGAM <small>(si ya existe)</small><input name="id" placeholder="vacío = generar uno"></label>
+          </div>
+          <label>Dirección <input name="direccion"></label>
+          <div class="grid2 tight">
+            <label>Latitud <input name="lat" inputmode="decimal" placeholder="-25.2700"></label>
+            <label>Longitud <input name="lon" inputmode="decimal" placeholder="-57.4900"></label>
+          </div>
+          <p class="muted small">Haz clic en el mapa sobre el edificio, o
+            <a href="#" id="lnk-gmaps" target="_blank" rel="noopener">búscalo en Google Maps</a> (clic derecho → copiar coordenadas).</p>
+          <fieldset><legend>Equipos a monitorear</legend>
+            <label class="inline"><input type="checkbox" name="psa" checked> Planta PSA de O₂</label>
+            <label class="inline"><input type="checkbox" name="compresor"> Compresor de aire</label>
+            <label class="inline"><input type="checkbox" name="vacio"> Bomba de vacío</label>
+          </fieldset>
+          <div class="grid2 tight">
+            <label>Pureza O₂ alerta (%) <input name="pureza_alerta" value="93"></label>
+            <label>Pureza O₂ crítica (%) <input name="pureza_critica" value="90"></label>
+          </div>
+          <label class="inline hidden" id="lbl-distinto"><input type="checkbox" name="confirmar_distinto"> Confirmo que es un hospital distinto</label>
+          <div class="row">
+            <button class="primary">Crear hospital</button>
+            <button type="button" id="btn-h-cancelar">Cancelar</button>
+          </div>
+        </div>
+        <div id="map" class="map"></div>
+      </div>
+    </form>
+
+    <div class="card flush">
+      <table class="table" id="tbl-hospitales">
+        <thead><tr><th>Hospital</th><th>Estado</th><th>Equipos</th><th>Unidades</th><th>WiFi</th><th></th></tr></thead>
+        <tbody><tr><td colspan="6" class="muted">Cargando…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- EQUIPOS -->
+  <section id="tab-equipos" class="tab">
+    <h1>Equipos</h1>
+    <div class="toolbar">
+      <button id="btn-e-nuevo" class="primary">+ Nuevo equipo</button>
+      <label class="inline">Puerto USB <select id="sel-puerto"></select></label>
+      <button id="btn-e-refresh">Actualizar</button>
+    </div>
+
+    <form id="form-equipo" class="card hidden">
+      <h2>Nuevo equipo</h2>
+      <div class="grid2">
+        <div class="stack">
+          <label>Hospital <select name="hospital_id" class="sel-hospital" required><option value="">Elegir…</option></select></label>
+          <fieldset><legend>Qué mide</legend>
+            <label class="inline"><input type="radio" name="tipo" value="o2" checked> Planta de O₂</label>
+            <label class="inline"><input type="radio" name="tipo" value="air"> Aire / compresor</label>
+            <label class="inline"><input type="radio" name="tipo" value="vacuum"> Bomba de vacío</label>
+          </fieldset>
+          <label>Marca de la planta
+            <input name="marca" list="marcas" placeholder="BOGE, AirSep, Atlas Copco…" required>
+            <datalist id="marcas"><option>BOGE</option><option>AirSep</option><option>Atlas Copco</option>
+              <option>Oxymat</option><option>Novair</option><option>Inmatec</option><option>Busch</option><option>Becker</option></datalist></label>
+          <fieldset><legend>Tipo de ESP32</legend>
+            <label class="inline"><input type="radio" name="firmware" value="plc"> Pasarela PLC (Arduino + ENC28J60)</label>
+            <label class="inline"><input type="radio" name="firmware" value="sensores" checked> Sensores 4-20 mA (MicroPython)</label>
+            <p id="fw-nota" class="muted small"></p>
+          </fieldset>
+          <label>UNIT_ID <small>(identificador del equipo en el hospital)</small><input name="unidad" required placeholder="O2-1"></label>
+          <div id="net-plc" class="grid2 tight">
+            <label>IP del ESP32 en la red del PLC <small>100.100.200.</small><input name="eth_ip" value="50"></label>
+            <label>IP del PLC <small>100.100.200.</small><input name="plc_ip" value="10"></label>
+          </div>
+          <div id="net-sens" class="stack hidden">
+            <label class="inline"><input type="checkbox" name="leer_plc"> También leer el PLC BOGE (requiere módulo W5500)</label>
+          </div>
+        </div>
+        <div class="stack">
+          <div id="wifi-box" class="subcard">
+            <h3>WiFi del hospital</h3>
+            <p id="wifi-estado" class="muted small">Elige un hospital.</p>
+            <div id="wifi-form" class="hidden stack">
+              <label>Red (SSID) <input id="wifi-ssid" autocomplete="off"></label>
+              <label>Contraseña <input id="wifi-pass" type="password" autocomplete="new-password"></label>
+              <button type="button" id="btn-wifi-guardar">Guardar WiFi</button>
+              <p class="muted small">El ESP32 solo usa WiFi de 2,4 GHz.</p>
+            </div>
+          </div>
+          <div class="subcard">
+            <h3>Resumen</h3>
+            <div id="resumen" class="muted small">—</div>
+          </div>
+          <label class="inline"><input type="checkbox" name="reemplazar"> Reemplazar si ya existe</label>
+          <div class="row">
+            <button class="primary">Generar carpeta</button>
+            <button type="button" id="btn-e-cancelar">Cancelar</button>
+          </div>
+        </div>
+      </div>
+    </form>
+
+    <div class="card flush">
+      <table class="table" id="tbl-equipos">
+        <thead><tr><th>Hospital</th><th>Unidad</th><th>Marca / firmware</th><th>Estado</th><th>Acciones</th></tr></thead>
+        <tbody><tr><td colspan="5" class="muted">Cargando…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- REGISTRO -->
+  <section id="tab-registro" class="tab">
+    <h1>Registro</h1>
+    <div class="grid-log">
+      <div class="card flush"><ul id="job-list" class="joblist"><li class="muted pad">Sin trabajos todavía.</li></ul></div>
+      <div class="card">
+        <div class="row between"><h2 id="job-title">—</h2><span id="job-badge" class="badge"></span></div>
+        <div id="job-result"></div>
+        <pre id="job-log" class="log"></pre>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="footer">
+  <img src="/logo-mspbs.jpg" alt="" class="logo small">
+  <div><span class="muted small">Desarrollado por</span><br><b>DGGIES · MSPBS — Asesoría Técnica</b></div>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

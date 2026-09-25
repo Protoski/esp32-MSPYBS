@@ -131,9 +131,10 @@ git push origin main
 
 ### Paso 5: Configurar el ESP32
 
-**Forma recomendada:** en Claude Code (en tu PC, con el ESP32 por USB) usa el skill
-`/nuevo-equipo`, o directamente `python3 tools/equipos/equipos.py`: busca o crea el
-hospital, genera la carpeta del equipo, sube el firmware y verifica que envía datos.
+**Forma recomendada:** en tu PC, con el ESP32 por USB, abre la interfaz gráfica
+`python3 tools/equipos/equipos_gui.py` (ver `tools/equipos/README.md`) o usa el skill
+`/nuevo-equipo` en Claude Code: buscan o crean el hospital, generan la carpeta del
+equipo, suben el firmware y verifican que envía datos.
 
 Forma manual:
 

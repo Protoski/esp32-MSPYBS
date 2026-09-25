@@ -10,6 +10,9 @@ el servidor MCP `mspybs-plantas`). Responder en español, un paso a la vez, y
 esperar confirmación antes de crear hospitales, generar carpetas o subir firmware.
 
 Motor: `python3 tools/equipos/equipos.py <subcomando>` (desde la raíz del repo).
+Si el usuario prefiere hacerlo con ventanas y botones, ofrecer la interfaz gráfica:
+`python3 tools/equipos/equipos_gui.py` (mismos pasos: Configuración, Hospitales,
+Equipos → Nuevo equipo, Subir, Verificar).
 Nunca escribir tokens ni contraseñas en el chat ni en comandos: el script los pide
 oculto cuando el usuario ejecuta él mismo `! python3 tools/equipos/equipos.py ...`.
 

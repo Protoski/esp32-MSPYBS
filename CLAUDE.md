@@ -61,9 +61,14 @@ Servidor MCP (mcp-server/) <-- Claude Code local del usuario
 ## Alta de equipos (skill `/nuevo-equipo`)
 
 Usar el skill `.claude/skills/nuevo-equipo/` desde el Claude Code local del
-usuario. Motor: `tools/equipos/equipos.py` (check, config-global, wifi, importar,
-estado, siguiente-unidad, generar-plc, generar-sensores, subir, actualizar,
-verificar, inventario). Configuración local en `~/.config/mspybs/` (permisos 600):
+usuario, o la **interfaz gráfica** `python3 tools/equipos/equipos_gui.py` (web local
+en 127.0.0.1 con token por arranque; menús Inicio, Configuración, Hospitales,
+Equipos, Registro; ver `tools/equipos/README.md`). Motor común:
+`tools/equipos/equipos.py` (check, config-global, wifi, importar, estado,
+siguiente-unidad, generar-plc, generar-sensores, subir, actualizar, verificar,
+inventario, hospitales listar/duplicados/crear/equipos, firmware-mpy; `--json` en
+estado, inventario, check y hospitales). `global.env` guarda también `ADMIN_TOKEN`
+para crear hospitales desde la GUI. Configuración local en `~/.config/mspybs/` (permisos 600):
 `global.env` (API_URL, DEVICE_TOKEN), `wifi/<hospital_id>.env` y el inventario
 `equipos.json`. Las carpetas de equipos se generan en `~/Escritorio/equipos/`. Los
 secretos los ingresa el usuario con `! python3 tools/equipos/equipos.py ...`

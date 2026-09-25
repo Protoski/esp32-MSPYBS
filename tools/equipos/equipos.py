@@ -190,14 +190,16 @@ def pick_port(port):
 
 
 def cmd_check(args):
-    ok = True
+    say = (lambda *a, **k: None) if args.json else print
+    rep = {"arduino_cli": None, "core_esp32": False, "librerias": {}, "esptool": False,
+           "mpremote": False, "puertos": [], "puertos_sin_permiso": [], "config_global": False}
     cli = arduino_cli()
     if not cli and args.install:
         run(["sh", "-c", "curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh"
                          " | BINDIR=$HOME/.local/bin sh"])
         cli = arduino_cli()
-    print(f"arduino-cli: {cli or 'NO INSTALADO'}")
-    ok &= bool(cli)
+    rep["arduino_cli"] = cli
+    say(f"arduino-cli: {cli or 'NO INSTALADO'}")
     if cli:
         cores = subprocess.run([cli, "core", "list"], capture_output=True, text=True).stdout
         if "esp32:esp32" not in cores and args.install:
@@ -206,9 +208,8 @@ def cmd_check(args):
             run([cli, "core", "update-index"])
             run([cli, "core", "install", "esp32:esp32"])
             cores = subprocess.run([cli, "core", "list"], capture_output=True, text=True).stdout
-        has_core = "esp32:esp32" in cores
-        print(f"core esp32:esp32: {'ok' if has_core else 'FALTA'}")
-        ok &= has_core
+        rep["core_esp32"] = "esp32:esp32" in cores
+        say(f"core esp32:esp32: {'ok' if rep['core_esp32'] else 'FALTA'}")
         libs = subprocess.run([cli, "lib", "list"], capture_output=True, text=True).stdout
         for lib in ARDUINO_LIBS:
             name = lib.split("@")[0]
@@ -216,8 +217,8 @@ def cmd_check(args):
             if not present and args.install:
                 run([cli, "lib", "install", lib])
                 present = True
-            print(f"librería {name}: {'ok' if present else 'FALTA'}")
-            ok &= present
+            rep["librerias"][name] = present
+            say(f"librería {name}: {'ok' if present else 'FALTA'}")
     # MicroPython (solo para equipos de sensores)
     esp = esptool_cmd()
     mpr = which("mpremote")
@@ -229,31 +230,50 @@ def cmd_check(args):
             else:
                 run([sys.executable, "-m", "pip", "install", "--user", pkg], check=False)
         esp, mpr = esptool_cmd(), which("mpremote")
-    print(f"esptool (solo sensores): {'ok' if esp else 'no instalado'}")
-    print(f"mpremote (solo sensores): {'ok' if mpr else 'no instalado'}")
-    ports = serial_ports()
-    print("puertos USB: " + (", ".join(ports) if ports else "ninguno"))
-    for p in ports:
+    rep["esptool"], rep["mpremote"] = bool(esp), bool(mpr)
+    say(f"esptool (solo sensores): {'ok' if esp else 'no instalado'}")
+    say(f"mpremote (solo sensores): {'ok' if mpr else 'no instalado'}")
+    rep["puertos"] = serial_ports()
+    say("puertos USB: " + (", ".join(rep["puertos"]) if rep["puertos"] else "ninguno"))
+    for p in rep["puertos"]:
         if not os.access(p, os.R_OK | os.W_OK):
-            print(f"  sin permiso sobre {p}: ejecuta 'sudo usermod -aG dialout $USER' y vuelve a iniciar sesión")
-            ok = False
+            rep["puertos_sin_permiso"].append(p)
+            say(f"  sin permiso sobre {p}: ejecuta 'sudo usermod -aG dialout $USER' y vuelve a iniciar sesión")
     g = read_env(os.path.join(CONFIG_DIR, "global.env"))
-    print(f"configuración global: {'ok' if g.get('API_URL') and g.get('DEVICE_TOKEN') else 'FALTA (config-global)'}")
+    rep["config_global"] = bool(g.get("API_URL") and g.get("DEVICE_TOKEN"))
+    say(f"configuración global: {'ok' if rep['config_global'] else 'FALTA (config-global)'}")
+    ok = (bool(cli) and rep["core_esp32"] and all(rep["librerias"].values())
+          and not rep["puertos_sin_permiso"] and rep["config_global"])
+    rep["ok"] = ok
+    if args.json:
+        print(json.dumps(rep, ensure_ascii=False))
     sys.exit(0 if ok else 2)
 
 
 # ── configuración local ────────────────────────────────────────────────────
 
 def cmd_config_global(args):
+    """Sin opciones pide URL, DEVICE_TOKEN y ADMIN_TOKEN (opcional). Con opciones,
+    solo lo indicado; los tokens se leen ocultos o por stdin, nunca como argumento."""
     path = os.path.join(CONFIG_DIR, "global.env")
     cfg = read_env(path)
-    url = args.api_url or ask("URL del backend (termina en /exec)")
-    if not re.match(r"^https://script\.google\.com/macros/s/[\w-]+/exec$", url.strip()):
-        fail("la URL debe tener la forma https://script.google.com/macros/s/.../exec")
-    token = ask("DEVICE_TOKEN", secret=True).strip()
-    if not token:
-        fail("DEVICE_TOKEN vacío")
-    cfg.update(API_URL=url.strip(), DEVICE_TOKEN=token)
+    todo = not (args.api_url or args.device_token or args.admin_token)
+    url = args.api_url or (ask("URL del backend (termina en /exec)") if todo else None)
+    if url is not None:
+        if not re.match(r"^https://script\.google\.com/macros/s/[\w-]+/exec$", url.strip()):
+            fail("la URL debe tener la forma https://script.google.com/macros/s/.../exec")
+        cfg["API_URL"] = url.strip()
+    if todo or args.device_token:
+        token = ask("DEVICE_TOKEN", secret=True).strip()
+        if not token:
+            fail("DEVICE_TOKEN vacío")
+        cfg["DEVICE_TOKEN"] = token
+    if todo or args.admin_token:
+        admin = ask("ADMIN_TOKEN (para crear hospitales; Enter para omitir)", secret=True).strip()
+        if admin:
+            cfg["ADMIN_TOKEN"] = admin
+        elif args.admin_token:
+            fail("ADMIN_TOKEN vacío")
     write_env(path, cfg)
     print(f"Guardado en {path} (permisos 600).")
 
@@ -291,11 +311,26 @@ def cmd_importar(args):
         print(f"WiFi '{vals['WIFI_SSID']}' importado para el hospital {args.hospital_id}.")
 
 
+def mpy_firmware():
+    return next(iter(sorted(glob.glob(os.path.join(CONFIG_DIR, "micropython", "*.bin")))), None)
+
+
 def cmd_estado(args):
     g = read_env(os.path.join(CONFIG_DIR, "global.env"))
+    if args.json:
+        wifis = sorted(glob.glob(os.path.join(CONFIG_DIR, "wifi", "*.env")))
+        print(json.dumps({
+            "config_dir": CONFIG_DIR,
+            "api_url_final": g["API_URL"][-12:] if g.get("API_URL") else None,
+            "device_token": bool(g.get("DEVICE_TOKEN")), "admin_token": bool(g.get("ADMIN_TOKEN")),
+            "micropython_bin": mpy_firmware(),
+            "wifi": [{"hospital_id": os.path.basename(w)[:-4], "ssid": read_env(w).get("WIFI_SSID", "")} for w in wifis],
+        }, ensure_ascii=False))
+        return
     print(f"Carpeta de configuración: {CONFIG_DIR}")
     print(f"API_URL: {'…' + g['API_URL'][-12:] if g.get('API_URL') else 'falta'}")
     print(f"DEVICE_TOKEN: {'guardado' if g.get('DEVICE_TOKEN') else 'falta'}")
+    print(f"ADMIN_TOKEN: {'guardado' if g.get('ADMIN_TOKEN') else 'falta (solo para crear hospitales)'}")
     wifis = sorted(glob.glob(os.path.join(CONFIG_DIR, "wifi", "*.env")))
     print(f"WiFi guardados: {len(wifis)}")
     for w in wifis:
@@ -445,7 +480,7 @@ def cmd_subir(args):
         esp = esptool_cmd() or fail("falta esptool: ejecuta check --install --sensores")
         mpr = which("mpremote") or fail("falta mpremote: ejecuta check --install --sensores")
         if not args.solo_archivos:
-            fw = args.firmware or next(iter(sorted(glob.glob(os.path.join(CONFIG_DIR, "micropython", "*.bin")))), None)
+            fw = args.firmware or mpy_firmware()
             if not fw:
                 fail("falta el firmware MicroPython: descarga ESP32_GENERIC .bin de "
                      f"https://micropython.org/download/ESP32_GENERIC/ en {CONFIG_DIR}/micropython/ o usa --firmware")
@@ -569,12 +604,211 @@ def cmd_verificar(args):
 
 def cmd_inventario(args):
     items = [e for e in load_inventory() if not args.hospital_id or e["hospital_id"] == args.hospital_id]
+    if args.json:
+        print(json.dumps(items, ensure_ascii=False))
+        return
     if not items:
         print("Inventario vacío.")
         return
     for e in sorted(items, key=lambda x: (x.get("hospital_nombre", ""), x["unit_id"])):
         print(f"- {e.get('hospital_nombre', '?')} · {e['unit_id']} ({e.get('unit_type') or 'todos'}) · "
               f"{e.get('marca', '?')} · {e.get('firmware')} · {e.get('estado')} · {e.get('carpeta')}")
+
+
+# ── hospitales (backend) ───────────────────────────────────────────────────
+
+# Mismo criterio que check_hospitals / create_hospital del MCP (mcp-server/index.js)
+SIM_GENERIC = GENERIC_WORDS | {"hospitales", "e", "en", "boge", "plantas", "oxigeno", "o2",
+                               "unidad", "salud", "servicio"}
+SIM_ABBR = {"mcal": "mariscal", "gral": "general", "dr": "doctor", "dra": "doctora", "sta": "santa",
+            "sto": "santo", "hosp": "hospital", "reg": "regional", "pdte": "presidente",
+            "cnel": "coronel", "tte": "teniente", "nac": "nacional", "inst": "instituto"}
+UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
+
+
+def norm_name(text):
+    t = unicodedata.normalize("NFD", str(text or "")).encode("ascii", "ignore").decode().lower()
+    return re.sub(r"\s+", " ", t).strip()
+
+
+def name_tokens(name):
+    words = re.split(r"[^a-z0-9]+", norm_name(name))
+    return {SIM_ABBR.get(w, w) for w in words if len(w) > 1 and SIM_ABBR.get(w, w) not in SIM_GENERIC}
+
+
+def similar(a, b):
+    ta, tb = name_tokens(a.get("nombre")), name_tokens(b.get("nombre"))
+    if not ta or not tb:
+        return norm_name(a.get("nombre")) == norm_name(b.get("nombre")) and \
+            norm_name(a.get("ciudad")) == norm_name(b.get("ciudad"))
+    small, big = (ta, tb) if len(ta) <= len(tb) else (tb, ta)
+    return small <= big
+
+
+def api_url():
+    url = read_env(os.path.join(CONFIG_DIR, "global.env")).get("API_URL")
+    if not url:
+        fail("falta API_URL: guarda la configuración global")
+    return url
+
+
+def api_get(action):
+    try:
+        with urllib.request.urlopen(f"{api_url()}?action={action}", timeout=30) as r:
+            data = json.load(r)
+    except Exception as e:
+        fail(f"no se pudo consultar el backend: {e}")
+    if not data.get("ok", True):
+        fail(data.get("error", "error del backend"))
+    return data
+
+
+def api_post(body):
+    token = read_env(os.path.join(CONFIG_DIR, "global.env")).get("ADMIN_TOKEN")
+    if not token:
+        fail("falta ADMIN_TOKEN: guárdalo en la configuración para crear o editar hospitales")
+    req = urllib.request.Request(api_url(), data=json.dumps({"token": token, **body}).encode(),
+                                 headers={"Content-Type": "text/plain;charset=utf-8"}, method="POST")
+    try:
+        # Apps Script responde 302; urllib lo sigue como GET hasta la respuesta real
+        with urllib.request.urlopen(req, timeout=30) as r:
+            data = json.load(r)
+    except Exception as e:
+        fail(f"no se pudo enviar al backend: {e}")
+    if not data.get("ok"):
+        fail(data.get("error", "error del backend"))
+    return data
+
+
+def is_online(ts, now_ms):
+    if not ts:
+        return False
+    try:
+        t = datetime.datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp() * 1000
+    except ValueError:
+        return False
+    return abs(now_ms - t) < 60000
+
+
+def list_hospitals():
+    hospitals = api_get("hospitals").get("hospitals", [])
+    latest = api_get("latest_all")
+    now_ms = datetime.datetime.fromisoformat(latest["now"].replace("Z", "+00:00")).timestamp() * 1000 \
+        if latest.get("now") else time.time() * 1000
+    by_id = {r.get("hospital_id"): r for r in latest.get("rows", [])}
+    inv = load_inventory()
+    out = []
+    for h in hospitals:
+        row = by_id.get(h["id"]) or {}
+        units = [{"unit_id": u.get("unit_id"), "unit_type": u.get("unit_type"), "ultimo": u.get("timestamp"),
+                  "en_linea": is_online(u.get("timestamp"), now_ms)} for u in row.get("units", [])]
+        out.append({**{k: h.get(k) for k in ("id", "nombre", "ciudad", "direccion", "activo", "lat", "lon",
+                                           "equipment", "thresholds", "created_at")},
+                    "ultimo": row.get("timestamp"), "en_linea": is_online(row.get("timestamp"), now_ms),
+                    "unidades": units,
+                    "equipos_inventario": sum(1 for e in inv if e["hospital_id"] == h["id"]),
+                    "wifi_guardado": os.path.exists(os.path.join(CONFIG_DIR, "wifi", f"{h['id']}.env"))})
+    return out
+
+
+def cmd_hosp_listar(args):
+    items = list_hospitals()
+    if args.json:
+        print(json.dumps(items, ensure_ascii=False))
+        return
+    for h in items:
+        print(f"- {h['nombre']} ({h.get('ciudad') or 'sin ciudad'}) · {h['id']} · "
+              f"{'EN LÍNEA' if h['en_linea'] else 'sin señal'} · {len(h['unidades'])} equipo(s)")
+
+
+def duplicate_groups(hospitals):
+    parent = list(range(len(hospitals)))
+
+    def root(i):
+        while parent[i] != i:
+            i = parent[i]
+        return i
+    for i in range(len(hospitals)):
+        for j in range(i + 1, len(hospitals)):
+            if similar(hospitals[i], hospitals[j]):
+                parent[root(j)] = root(i)
+    groups = {}
+    for i, h in enumerate(hospitals):
+        groups.setdefault(root(i), []).append(h)
+    return [g for g in groups.values() if len(g) > 1]
+
+
+def cmd_hosp_duplicados(args):
+    items = list_hospitals()
+    groups = duplicate_groups(items)
+    bad = [h for h in items if not UUID_RE.match(str(h["id"]).strip())]
+    if args.json:
+        print(json.dumps({"grupos": groups, "ids_dudosos": bad}, ensure_ascii=False))
+        return
+    print(f"Grupos de posibles duplicados: {len(groups)}")
+    for g in groups:
+        print("- " + " | ".join(f"{h['nombre']} ({h['id']})" for h in g))
+    for h in bad:
+        print(f"ID sin formato UUID: {h['nombre']} → {h['id']}")
+
+
+def cmd_hosp_crear(args):
+    existing = api_get("hospitals").get("hospitals", [])
+    cand = {"nombre": args.nombre, "ciudad": args.ciudad or ""}
+    hid = (args.id or "").strip()
+    for h in existing:
+        if hid and str(h["id"]).strip() == hid:
+            fail(f"ya existe un hospital con ese id: {h['nombre']}")
+        if norm_name(h["nombre"]) == norm_name(args.nombre) and norm_name(h.get("ciudad")) == norm_name(args.ciudad):
+            fail(f"ya existe: {h['nombre']} ({h.get('ciudad')}), id {h['id']}")
+    parecidos = [h for h in existing if similar(h, cand)]
+    if parecidos and not args.confirmar_distinto:
+        fail("hay hospitales con nombre parecido (¿es el mismo?): " +
+             "; ".join(f"{h['nombre']} ({h.get('ciudad') or 'sin ciudad'}), id {h['id']}" for h in parecidos) +
+             ". Si es otro hospital, repite con --confirmar-distinto.")
+    if (args.lat is None) != (args.lon is None):
+        fail("indica latitud y longitud juntas")
+    body = {"action": "add_hospital", "nombre": args.nombre.strip(), "ciudad": (args.ciudad or "").strip(),
+            "direccion": (args.direccion or "").strip(), "activo": True,
+            "thresholds": {"o2_purity_warn": args.pureza_alerta, "o2_purity_critical": args.pureza_critica},
+            "equipment": {"psa_enabled": args.psa, "compressor_enabled": args.compresor,
+                          "vacuum_enabled": args.vacio}}
+    if hid:
+        body["id"] = hid
+    if args.lat is not None:
+        body["lat"], body["lon"] = args.lat, args.lon
+    res = api_post(body)
+    out = {"id": res.get("id"), "nombre": body["nombre"], "id_generado": not hid}
+    if args.json:
+        print(json.dumps(out, ensure_ascii=False))
+    else:
+        print(f"Hospital creado: {body['nombre']} · id {res.get('id')}")
+        if not hid:
+            print("Carga este id en SIGGAM como sensorMspbsId del hospital.")
+
+
+def cmd_hosp_equipos(args):
+    h = next((x for x in api_get("hospitals").get("hospitals", []) if str(x["id"]).strip() == args.id), None)
+    if not h:
+        fail(f"no se encontró el hospital {args.id}")
+    eq = {"psa_enabled": True, "compressor_enabled": True, "vacuum_enabled": True, **(h.get("equipment") or {})}
+    for key, val in (("psa_enabled", args.psa), ("compressor_enabled", args.compresor), ("vacuum_enabled", args.vacio)):
+        if val is not None:
+            eq[key] = val
+    api_post({"action": "update_hospital", "id": h["id"], "equipment": eq})
+    print(f"Equipos de {h['nombre']}: PSA {'sí' if eq['psa_enabled'] else 'no'}, "
+          f"compresor {'sí' if eq['compressor_enabled'] else 'no'}, vacío {'sí' if eq['vacuum_enabled'] else 'no'}")
+
+
+def cmd_firmware_mpy(args):
+    if not os.path.isfile(args.desde) or not args.desde.endswith(".bin"):
+        fail("indica el archivo .bin de MicroPython (ESP32_GENERIC) descargado de micropython.org")
+    dest_dir = os.path.join(CONFIG_DIR, "micropython")
+    os.makedirs(dest_dir, exist_ok=True)
+    for old in glob.glob(os.path.join(dest_dir, "*.bin")):
+        os.remove(old)
+    shutil.copyfile(args.desde, os.path.join(dest_dir, os.path.basename(args.desde)))
+    print(f"Firmware MicroPython guardado: {os.path.basename(args.desde)}")
 
 
 # ── CLI ────────────────────────────────────────────────────────────────────
@@ -586,10 +820,13 @@ def main():
     s = sub.add_parser("check", help="verificar (e instalar) herramientas y puertos")
     s.add_argument("--install", action="store_true")
     s.add_argument("--sensores", action="store_true", help="incluir esptool y mpremote")
+    s.add_argument("--json", action="store_true")
     s.set_defaults(fn=cmd_check)
 
-    s = sub.add_parser("config-global", help="guardar API_URL y DEVICE_TOKEN (el token se pide oculto)")
+    s = sub.add_parser("config-global", help="guardar API_URL, DEVICE_TOKEN y ADMIN_TOKEN (tokens ocultos)")
     s.add_argument("--api-url")
+    s.add_argument("--device-token", action="store_true", help="pedir (o leer por stdin) el DEVICE_TOKEN")
+    s.add_argument("--admin-token", action="store_true", help="pedir (o leer por stdin) el ADMIN_TOKEN")
     s.set_defaults(fn=cmd_config_global)
 
     s = sub.add_parser("wifi", help="guardar el WiFi de un hospital (la contraseña se pide oculta)")
@@ -603,6 +840,7 @@ def main():
     s.set_defaults(fn=cmd_importar)
 
     s = sub.add_parser("estado", help="mostrar la configuración guardada (sin secretos)")
+    s.add_argument("--json", action="store_true")
     s.set_defaults(fn=cmd_estado)
 
     s = sub.add_parser("siguiente-unidad", help="próximo UNIT_ID libre de un tipo en un hospital")
@@ -652,7 +890,42 @@ def main():
 
     s = sub.add_parser("inventario", help="listar los equipos generados")
     s.add_argument("--hospital-id")
+    s.add_argument("--json", action="store_true")
     s.set_defaults(fn=cmd_inventario)
+
+    s = sub.add_parser("hospitales", help="consultar, crear y configurar hospitales en el backend")
+    hs = s.add_subparsers(dest="hcmd", required=True)
+    h = hs.add_parser("listar", help="hospitales con su estado y equipos")
+    h.add_argument("--json", action="store_true")
+    h.set_defaults(fn=cmd_hosp_listar)
+    h = hs.add_parser("duplicados", help="posibles duplicados e IDs dudosos")
+    h.add_argument("--json", action="store_true")
+    h.set_defaults(fn=cmd_hosp_duplicados)
+    h = hs.add_parser("crear", help="crear un hospital (requiere ADMIN_TOKEN)")
+    h.add_argument("--nombre", required=True)
+    h.add_argument("--ciudad", default="")
+    h.add_argument("--direccion", default="")
+    h.add_argument("--id", help="sensorMspbsId de SIGGAM si ya existe; si no, lo genera el backend")
+    h.add_argument("--lat", type=float)
+    h.add_argument("--lon", type=float)
+    h.add_argument("--psa", action=argparse.BooleanOptionalAction, default=True)
+    h.add_argument("--compresor", action=argparse.BooleanOptionalAction, default=False)
+    h.add_argument("--vacio", action=argparse.BooleanOptionalAction, default=False)
+    h.add_argument("--pureza-alerta", type=float, default=93)
+    h.add_argument("--pureza-critica", type=float, default=90)
+    h.add_argument("--confirmar-distinto", action="store_true")
+    h.add_argument("--json", action="store_true")
+    h.set_defaults(fn=cmd_hosp_crear)
+    h = hs.add_parser("equipos", help="activar/desactivar PSA, compresor y vacío (requiere ADMIN_TOKEN)")
+    h.add_argument("--id", required=True)
+    h.add_argument("--psa", action=argparse.BooleanOptionalAction, default=None)
+    h.add_argument("--compresor", action=argparse.BooleanOptionalAction, default=None)
+    h.add_argument("--vacio", action=argparse.BooleanOptionalAction, default=None)
+    h.set_defaults(fn=cmd_hosp_equipos)
+
+    s = sub.add_parser("firmware-mpy", help="guardar el .bin de MicroPython para equipos de sensores")
+    s.add_argument("--desde", required=True)
+    s.set_defaults(fn=cmd_firmware_mpy)
 
     args = p.parse_args()
     args.fn(args)
