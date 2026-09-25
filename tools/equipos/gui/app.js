@@ -153,11 +153,29 @@ $('#form-config').addEventListener('submit', async (ev) => {
 });
 $('#form-importar').addEventListener('submit', async (ev) => {
   ev.preventDefault();
-  const r = await api('/api/importar', formData(ev.target));
-  if (!r.ok) return toast(r.error, 'bad');
-  toast(r.salida || 'Importado');
-  loadEstado();
-  loadHospitales();
+  const d = formData(ev.target);
+  const out = $('#importar-resultado');
+  if (!d.hospital_id && !confirm('No elegiste hospital: solo se importarán la URL y el DEVICE_TOKEN, no el WiFi.\n¿Continuar?')) return;
+  const r = await api('/api/importar', d);
+  if (!r.ok) {
+    out.replaceChildren(el('div', { class: 'diag bad' }, r.error));
+    return toast(r.error, 'bad');
+  }
+  // Lo que informa equipos.py: "✓ ..." importado, "⚠ ..." no importado
+  const lines = (r.salida || '').split('\n').filter(Boolean);
+  await loadEstado();
+  await loadHospitales();
+  const e = state.estado;
+  const h = state.hospitales.find((x) => x.id === d.hospital_id);
+  const wifi = h && e.wifi.find((w) => w.hospital_id === h.id);
+  out.replaceChildren(
+    ...lines.map((l) => el('div', { class: l.startsWith('⚠') ? 'warn' : 'st-ok' }, l)),
+    el('div', { class: 'subcard' }, el('b', {}, 'Ahora está guardado en tu PC: '),
+      `URL ${e.api_url_final ? `…${e.api_url_final}` : 'no'} · DEVICE_TOKEN ${e.device_token ? 'sí' : 'no'}`,
+      h ? ` · WiFi de ${h.nombre}: ${wifi ? `"${wifi.ssid}"` : 'no'}` : '',
+      el('div', { class: 'muted' }, 'Los tokens no se muestran por seguridad; por eso los campos quedan vacíos.')),
+  );
+  toast(lines.some((l) => l.startsWith('⚠')) ? 'Importado con avisos' : 'Importado', lines.some((l) => l.startsWith('⚠')) ? 'bad' : 'ok');
 });
 $('#form-mpy').addEventListener('submit', async (ev) => {
   ev.preventDefault();

@@ -289,7 +289,12 @@ def cmd_wifi(args):
 
 
 def parse_secrets_h(path):
-    text = open(path, encoding="utf-8").read()
+    try:
+        text = open(path, encoding="utf-8").read()
+    except FileNotFoundError:
+        fail(f"no se encontró el archivo {path}")
+    except (OSError, UnicodeDecodeError) as e:
+        fail(f"no se pudo leer {path}: {e}")
     vals = {}
     for key in ("WIFI_SSID", "WIFI_PASSWORD", "API_URL", "DEVICE_TOKEN"):
         m = re.search(key + r'\s*=\s*"((?:[^"\\]|\\.)*)"', text)
@@ -298,17 +303,42 @@ def parse_secrets_h(path):
     return vals
 
 
+def is_placeholder(value):
+    return not value or "PEGAR" in value.upper() or value.upper().startswith("TU_")
+
+
 def cmd_importar(args):
-    vals = parse_secrets_h(args.desde)
-    if vals.get("API_URL") and vals.get("DEVICE_TOKEN") and "PEGAR" not in vals["DEVICE_TOKEN"]:
+    path = os.path.expanduser(args.desde.strip())
+    vals = parse_secrets_h(path)
+    hechos, avisos = [], []
+
+    url, token = vals.get("API_URL", ""), vals.get("DEVICE_TOKEN", "")
+    if not url or is_placeholder(url):
+        avisos.append("URL y DEVICE_TOKEN no importados: el archivo no tiene API_URL completa")
+    elif is_placeholder(token):
+        avisos.append("URL y DEVICE_TOKEN no importados: el DEVICE_TOKEN del archivo está vacío o sin completar")
+    else:
         g = read_env(os.path.join(CONFIG_DIR, "global.env"))
-        g.update(API_URL=vals["API_URL"], DEVICE_TOKEN=vals["DEVICE_TOKEN"])
+        g.update(API_URL=url, DEVICE_TOKEN=token)
         write_env(os.path.join(CONFIG_DIR, "global.env"), g)
-        print("Configuración global importada (API_URL y DEVICE_TOKEN).")
-    if vals.get("WIFI_SSID") and args.hospital_id:
+        hechos.append(f"URL del backend (…{url[-12:]}) y DEVICE_TOKEN importados")
+
+    ssid = vals.get("WIFI_SSID", "")
+    if not ssid or is_placeholder(ssid):
+        avisos.append("WiFi no importado: el archivo no tiene WIFI_SSID")
+    elif not args.hospital_id:
+        avisos.append(f"WiFi '{ssid}' no importado: elige el hospital al que pertenece esa red")
+    else:
         write_env(os.path.join(CONFIG_DIR, "wifi", f"{args.hospital_id}.env"),
-                  {"WIFI_SSID": vals["WIFI_SSID"], "WIFI_PASSWORD": vals.get("WIFI_PASSWORD", "")})
-        print(f"WiFi '{vals['WIFI_SSID']}' importado para el hospital {args.hospital_id}.")
+                  {"WIFI_SSID": ssid, "WIFI_PASSWORD": vals.get("WIFI_PASSWORD", "")})
+        hechos.append(f"WiFi '{ssid}' importado para el hospital {args.hospital_id}")
+
+    if not hechos:
+        fail("el archivo no tenía datos válidos para importar: " + "; ".join(avisos))
+    for h in hechos:
+        print(f"✓ {h}.")
+    for a in avisos:
+        print(f"⚠ {a}.")
 
 
 def mpy_firmware():
@@ -801,6 +831,7 @@ def cmd_hosp_equipos(args):
 
 
 def cmd_firmware_mpy(args):
+    args.desde = os.path.expanduser(args.desde.strip())
     if not os.path.isfile(args.desde) or not args.desde.endswith(".bin"):
         fail("indica el archivo .bin de MicroPython (ESP32_GENERIC) descargado de micropython.org")
     dest_dir = os.path.join(CONFIG_DIR, "micropython")

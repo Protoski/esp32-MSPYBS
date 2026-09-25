@@ -79,18 +79,19 @@
       <div class="stack">
         <form id="form-importar" class="card">
           <h2>Importar un secrets.h que ya funciona</h2>
-          <label>Ruta del archivo
-            <input name="desde" placeholder="/home/usuario/Escritorio/luque_O2_1/secrets.h"></label>
-          <label>Hospital de ese WiFi <small>(opcional)</small>
+          <label>Ruta del archivo <small>(se puede usar ~)</small>
+            <input name="desde" required placeholder="~/Escritorio/luque_O2_1/secrets.h"></label>
+          <label>Hospital de ese WiFi <small>(para importar también la red WiFi)</small>
             <select name="hospital_id" class="sel-hospital"><option value="">—</option></select></label>
           <button>Importar</button>
+          <div id="importar-resultado" class="stack small" style="margin-top:10px"></div>
         </form>
         <form id="form-mpy" class="card">
           <h2>Firmware MicroPython (equipos de sensores)</h2>
           <p class="muted small">Descarga el .bin <b>ESP32_GENERIC</b> de
             <a href="https://micropython.org/download/ESP32_GENERIC/" target="_blank" rel="noopener">micropython.org</a> e indica su ruta.
             Actual: <span id="mpy-actual">ninguno</span></p>
-          <label>Ruta del .bin <input name="desde" placeholder="/home/usuario/Descargas/ESP32_GENERIC-v1.24.bin"></label>
+          <label>Ruta del .bin <small>(se puede usar ~)</small><input name="desde" required placeholder="~/Descargas/ESP32_GENERIC-v1.24.bin"></label>
           <button>Guardar</button>
         </form>
       </div>
