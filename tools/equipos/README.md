@@ -17,9 +17,9 @@ menú de aplicaciones.
 | Menú | Qué hace |
 |---|---|
 | **Inicio** | Estado de arduino-cli, core ESP32, librerías, esptool y mpremote; instala lo que falta. Puertos USB y permisos. |
-| **Configuración** | URL del backend, `DEVICE_TOKEN` y `ADMIN_TOKEN` (no se vuelven a mostrar), importar un `secrets.h` que ya funciona y cargar el `.bin` de MicroPython. |
-| **Hospitales** | Lista con estado y equipos en línea, buscador y revisión de duplicados. Crear hospital con el ID de SIGGAM (o generarlo), dirección y ubicación en el mapa. Activar PSA/compresor/vacío y guardar el WiFi de cada hospital. |
-| **Equipos** | Asistente "Nuevo equipo" (hospital, qué mide, marca, tipo de ESP32, UNIT_ID sugerido, red del PLC) e inventario con Subir, Verificar, Actualizar firmware y Abrir carpeta. |
+| **Configuración** | URL del backend, `DEVICE_TOKEN` y `ADMIN_TOKEN` (no se vuelven a mostrar), URL del dashboard, importar un `secrets.h` que ya funciona, WiFi guardados (editar/eliminar) y el `.bin` de MicroPython. |
+| **Hospitales** | Lista con estado y equipos en línea, buscador, filtro activos/inactivos y **Exportar CSV**. Crear hospital con el ID de SIGGAM (o generarlo), dirección y ubicación en el mapa. Por hospital: **Editar** (el id no cambia), **Equipos** (PSA/compresor/vacío), **WiFi**, **+ Equipo**, **Dashboard**, **Mapa**, **Desactivar/Activar** y **Eliminar** (hay que escribir el nombre; mejor desactivar). **Revisar duplicados**: elegir cuál conservar, **Ver plan** y **Fusionar** (el sobrante se desactiva, no se borra). |
+| **Equipos** | Asistente "Nuevo equipo" (hospital, qué mide, marca, tipo de ESP32, UNIT_ID sugerido, red del PLC) e inventario con Subir, Verificar, Actualizar firmware, Abrir carpeta, **Editar** (regenera la carpeta), **Duplicar** (siguiente UNIT_ID), **Quitar** del inventario y **Exportar CSV**. |
 | **Registro** | Salida en vivo de cada instalación, generación, subida o verificación, con el diagnóstico del resultado. |
 
 Tipos de ESP32:

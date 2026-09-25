@@ -133,6 +133,12 @@ def api_get(path, q):
         if r["ok"]:
             r["data"] = r.pop("salida").splitlines()[-1]
         return r
+    if path in ("/api/exportar/hospitales", "/api/exportar/inventario"):
+        args = ["hospitales", "exportar"] if path.endswith("hospitales") else ["inventario", "--exportar", "csv"]
+        code, out, err = run_equipos(args, timeout=60)
+        if code != 0:
+            return result(code, out, err)
+        return {"__csv__": out, "__nombre__": f"{path.rsplit('/', 1)[-1]}_{time.strftime('%Y%m%d')}.csv"}
     if path == "/api/trabajos":
         with JOBS_LOCK:
             return {"ok": True, "data": [{k: j[k] for k in ("id", "titulo", "estado", "inicio")}
@@ -152,6 +158,8 @@ def api_post(path, b):
         args, stdin = ["config-global"], []
         if b.get("api_url"):
             args += ["--api-url", s(b["api_url"], "URL")]
+        if b.get("dashboard_url"):
+            args += ["--dashboard-url", s(b["dashboard_url"], "URL del dashboard")]
         if b.get("device_token"):
             args.append("--device-token")
             stdin.append(s(b["device_token"], "DEVICE_TOKEN"))
@@ -192,6 +200,46 @@ def api_post(path, b):
         for flag in ("psa", "compresor", "vacio"):
             opt_flag(args, flag, b.get(flag))
         return result(*run_equipos(args, timeout=60))
+    if path == "/api/hospitales/editar":
+        args = ["hospitales", "editar", "--id", s(b.get("id"), "id")]
+        for key in ("nombre", "ciudad", "direccion"):
+            if isinstance(b.get(key), str) and b[key].strip():
+                args += [f"--{key}", b[key].strip()]
+        if b.get("sin_ubicacion"):
+            args.append("--sin-ubicacion")
+        elif b.get("lat") not in (None, "") and b.get("lon") not in (None, ""):
+            args += ["--lat", str(float(b["lat"])), "--lon", str(float(b["lon"]))]
+        if b.get("pureza_alerta") not in (None, ""):
+            args += ["--pureza-alerta", str(float(b["pureza_alerta"]))]
+        if b.get("pureza_critica") not in (None, ""):
+            args += ["--pureza-critica", str(float(b["pureza_critica"]))]
+        for flag in ("psa", "compresor", "vacio"):
+            opt_flag(args, flag, b.get(flag))
+        return result(*run_equipos(args, timeout=60))
+    if path == "/api/hospitales/activo":
+        cmd = "activar" if b.get("activo") else "desactivar"
+        return result(*run_equipos(["hospitales", cmd, "--id", s(b.get("id"), "id")], timeout=60))
+    if path == "/api/hospitales/eliminar":
+        return result(*run_equipos(["hospitales", "eliminar", "--id", s(b.get("id"), "id"),
+                                    "--confirmar", s(b.get("confirmar"), "nombre")], timeout=60))
+    if path == "/api/hospitales/fusionar":
+        args = ["hospitales", "fusionar", "--json", "--conservar", s(b.get("conservar"), "hospital a conservar"),
+                "--duplicado", s(b.get("duplicado"), "duplicado")]
+        if isinstance(b.get("nombre"), str) and b["nombre"].strip():
+            args += ["--nombre", b["nombre"].strip()]
+        if b.get("config_del_duplicado"):
+            args.append("--config-del-duplicado")
+        if b.get("aplicar"):
+            args.append("--aplicar")
+        return result(*run_equipos(args, timeout=90), parse_json=True)
+    if path == "/api/inventario/eliminar":
+        args = ["inventario", "--eliminar", "--hospital-id", s(b.get("hospital_id"), "hospital"),
+                "--unidad", s(b.get("unidad"), "unidad")]
+        if b.get("borrar_carpeta"):
+            args.append("--borrar-carpeta")
+        return result(*run_equipos(args))
+    if path == "/api/wifi/eliminar":
+        return result(*run_equipos(["wifi", "--eliminar", "--hospital-id", s(b.get("hospital_id"), "hospital")]))
     if path == "/api/trabajos":
         return start_trabajo(b)
     if path == "/api/abrir":
@@ -288,6 +336,15 @@ class Handler(BaseHTTPRequestHandler):
             res = {"ok": False, "error": "tiempo de espera agotado"}
         if res is None:
             return self._send(404, {"ok": False, "error": "no encontrado"})
+        if "__csv__" in res:
+            data = res["__csv__"].encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/csv; charset=utf-8")
+            self.send_header("Content-Disposition", f'attachment; filename="{res["__nombre__"]}"')
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+            return
         self._send(200, res)
 
     def do_GET(self):

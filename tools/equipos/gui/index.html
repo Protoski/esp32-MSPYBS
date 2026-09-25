@@ -74,6 +74,8 @@
         <label>ADMIN_TOKEN <small id="st-admin"></small>
           <input name="admin_token" type="password" autocomplete="new-password" placeholder="dejar vacío para no cambiarlo"></label>
         <p class="muted small">DEVICE_TOKEN y ADMIN_TOKEN están en Apps Script → Configuración del proyecto → Propiedades de secuencia de comandos.</p>
+        <label>URL del dashboard web <small id="st-dash"></small>
+          <input name="dashboard_url" placeholder="https://esp32-mspybs.vercel.app" autocomplete="off"></label>
         <button class="primary">Guardar</button>
       </form>
       <div class="stack">
@@ -86,6 +88,10 @@
           <button>Importar</button>
           <div id="importar-resultado" class="stack small" style="margin-top:10px"></div>
         </form>
+        <div class="card">
+          <h2>WiFi guardados</h2>
+          <ul id="wifi-list" class="checks"><li class="muted">—</li></ul>
+        </div>
         <form id="form-mpy" class="card">
           <h2>Firmware MicroPython (equipos de sensores)</h2>
           <p class="muted small">Descarga el .bin <b>ESP32_GENERIC</b> de
@@ -103,26 +109,30 @@
     <h1>Hospitales</h1>
     <div class="toolbar">
       <input id="h-buscar" placeholder="Buscar por nombre, ciudad o id…">
+      <select id="h-filtro"><option value="activos">Activos</option><option value="inactivos">Inactivos</option><option value="todos">Todos</option></select>
       <button id="btn-h-nuevo" class="primary">+ Nuevo hospital</button>
       <button id="btn-h-dups">Revisar duplicados</button>
+      <button id="btn-h-export">Exportar CSV</button>
       <button id="btn-h-refresh">Actualizar</button>
     </div>
     <div id="dups" class="card hidden"></div>
 
     <form id="form-hospital" class="card hidden">
-      <h2>Nuevo hospital</h2>
+      <h2 id="fh-title">Nuevo hospital</h2>
+      <p id="fh-id" class="id hidden"></p>
       <div class="grid2">
         <div class="stack">
           <label>Nombre <input name="nombre" required placeholder="Hospital General de …"></label>
           <div class="grid2 tight">
             <label>Ciudad <input name="ciudad"></label>
-            <label>ID de SIGGAM <small>(si ya existe)</small><input name="id" placeholder="vacío = generar uno"></label>
+            <label>ID de SIGGAM <small id="fh-id-hint">(si ya existe)</small><input name="id" placeholder="vacío = generar uno"></label>
           </div>
           <label>Dirección <input name="direccion"></label>
           <div class="grid2 tight">
             <label>Latitud <input name="lat" inputmode="decimal" placeholder="-25.2700"></label>
             <label>Longitud <input name="lon" inputmode="decimal" placeholder="-57.4900"></label>
           </div>
+          <label class="inline hidden" id="lbl-sin-ubic"><input type="checkbox" name="sin_ubicacion"> Quitar la ubicación del mapa</label>
           <p class="muted small">Haz clic en el mapa sobre el edificio, o
             <a href="#" id="lnk-gmaps" target="_blank" rel="noopener">búscalo en Google Maps</a> (clic derecho → copiar coordenadas).</p>
           <fieldset><legend>Equipos a monitorear</legend>
@@ -136,7 +146,7 @@
           </div>
           <label class="inline hidden" id="lbl-distinto"><input type="checkbox" name="confirmar_distinto"> Confirmo que es un hospital distinto</label>
           <div class="row">
-            <button class="primary">Crear hospital</button>
+            <button class="primary" id="fh-submit">Crear hospital</button>
             <button type="button" id="btn-h-cancelar">Cancelar</button>
           </div>
         </div>
@@ -158,11 +168,12 @@
     <div class="toolbar">
       <button id="btn-e-nuevo" class="primary">+ Nuevo equipo</button>
       <label class="inline">Puerto USB <select id="sel-puerto"></select></label>
+      <button id="btn-e-export">Exportar CSV</button>
       <button id="btn-e-refresh">Actualizar</button>
     </div>
 
     <form id="form-equipo" class="card hidden">
-      <h2>Nuevo equipo</h2>
+      <h2 id="fe-title">Nuevo equipo</h2>
       <div class="grid2">
         <div class="stack">
           <label>Hospital <select name="hospital_id" class="sel-hospital" required><option value="">Elegir…</option></select></label>

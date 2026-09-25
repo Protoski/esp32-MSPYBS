@@ -109,3 +109,7 @@ button:disabled { opacity: .5; cursor: wait; }
   .topbar { padding: 10px 16px; } main { padding: 14px 16px 24px; }
   .map { min-height: 280px; }
 }
+button.danger { color: var(--bad); border-color: rgba(248, 113, 113, .45); }
+button.danger:hover { background: rgba(248, 113, 113, .12); border-color: var(--bad); }
+button.danger:disabled { opacity: .4; }
+input[readonly] { opacity: .7; }

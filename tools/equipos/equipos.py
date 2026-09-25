@@ -15,7 +15,9 @@ Ejecutar sin argumentos para ver los subcomandos. No imprime contraseñas ni tok
 """
 
 import argparse
+import csv
 import datetime
+import io
 import getpass
 import glob
 import json
@@ -257,6 +259,14 @@ def cmd_config_global(args):
     solo lo indicado; los tokens se leen ocultos o por stdin, nunca como argumento."""
     path = os.path.join(CONFIG_DIR, "global.env")
     cfg = read_env(path)
+    if args.dashboard_url:
+        if not re.match(r"^https?://[\w.-]+(:\d+)?/?$", args.dashboard_url.strip()):
+            fail("la URL del dashboard debe tener la forma https://esp32-mspybs.vercel.app")
+        cfg["DASHBOARD_URL"] = args.dashboard_url.strip().rstrip("/")
+        if not (args.api_url or args.device_token or args.admin_token):
+            write_env(path, cfg)
+            print(f"URL del dashboard guardada: {cfg['DASHBOARD_URL']}")
+            return
     todo = not (args.api_url or args.device_token or args.admin_token)
     url = args.api_url or (ask("URL del backend (termina en /exec)") if todo else None)
     if url is not None:
@@ -279,11 +289,17 @@ def cmd_config_global(args):
 
 
 def cmd_wifi(args):
+    path = os.path.join(CONFIG_DIR, "wifi", f"{args.hospital_id}.env")
+    if args.eliminar:
+        if not os.path.exists(path):
+            fail(f"no hay WiFi guardado para el hospital {args.hospital_id}")
+        os.remove(path)
+        print(f"WiFi del hospital {args.hospital_id} eliminado.")
+        return
     ssid = args.ssid or ask("Nombre de la red WiFi (SSID)")
     password = ask("Contraseña WiFi", secret=True)
     if not ssid.strip():
         fail("SSID vacío")
-    path = os.path.join(CONFIG_DIR, "wifi", f"{args.hospital_id}.env")
     write_env(path, {"WIFI_SSID": ssid.strip(), "WIFI_PASSWORD": password})
     print(f"WiFi '{ssid.strip()}' guardado para el hospital {args.hospital_id} (permisos 600).")
 
@@ -353,6 +369,7 @@ def cmd_estado(args):
             "config_dir": CONFIG_DIR,
             "api_url_final": g["API_URL"][-12:] if g.get("API_URL") else None,
             "device_token": bool(g.get("DEVICE_TOKEN")), "admin_token": bool(g.get("ADMIN_TOKEN")),
+            "dashboard_url": g.get("DASHBOARD_URL") or "https://esp32-mspybs.vercel.app",
             "micropython_bin": mpy_firmware(),
             "wifi": [{"hospital_id": os.path.basename(w)[:-4], "ssid": read_env(w).get("WIFI_SSID", "")} for w in wifis],
         }, ensure_ascii=False))
@@ -632,8 +649,42 @@ def cmd_verificar(args):
     sys.exit(0 if res["resultado"] == "ok" and not res["avisos"] else 3)
 
 
+def equipos_bases():
+    return [os.path.realpath(os.path.join(os.path.expanduser(d), "equipos")) for d in ("~/Escritorio", "~/Desktop", "~")]
+
+
+INV_COLS = ["hospital_nombre", "hospital_id", "unit_id", "unit_type", "marca", "firmware", "eth_ip", "plc_ip",
+            "wifi_ssid", "mac_eth", "estado", "generado", "subido", "verificado", "ultimo_resultado", "carpeta"]
+
+
 def cmd_inventario(args):
+    if args.eliminar:
+        if not (args.hospital_id and args.unidad):
+            fail("indica --hospital-id y --unidad del equipo a quitar")
+        items = load_inventory()
+        e = find_unit(items, args.hospital_id, args.unidad)
+        if not e:
+            fail(f"{args.unidad} no está en el inventario de ese hospital")
+        items.remove(e)
+        save_inventory(items)
+        print(f"{args.unidad} quitado del inventario.")
+        if args.borrar_carpeta and e.get("carpeta"):
+            folder = os.path.realpath(e["carpeta"])
+            if not any(folder.startswith(b + os.sep) for b in equipos_bases()):
+                fail(f"no se borra {folder}: solo se borran carpetas dentro de ~/Escritorio/equipos")
+            if os.path.isdir(folder):
+                shutil.rmtree(folder)
+                print(f"Carpeta {folder} borrada.")
+        return
     items = [e for e in load_inventory() if not args.hospital_id or e["hospital_id"] == args.hospital_id]
+    if args.exportar:
+        buf = io.StringIO()
+        w = csv.writer(buf)
+        w.writerow(INV_COLS)
+        for e in items:
+            w.writerow([e.get(c, "") for c in INV_COLS])
+        write_csv(buf.getvalue(), args.salida)
+        return
     if args.json:
         print(json.dumps(items, ensure_ascii=False))
         return
@@ -830,6 +881,164 @@ def cmd_hosp_equipos(args):
           f"compresor {'sí' if eq['compressor_enabled'] else 'no'}, vacío {'sí' if eq['vacuum_enabled'] else 'no'}")
 
 
+def find_hospital(hid, hospitals=None):
+    hospitals = hospitals if hospitals is not None else api_get("hospitals").get("hospitals", [])
+    h = next((x for x in hospitals if str(x["id"]).strip() == hid.strip()), None)
+    if not h:
+        fail(f"no se encontró el hospital {hid}")
+    return h
+
+
+def check_name_free(hospitals, hid, nombre, ciudad):
+    for x in hospitals:
+        if str(x["id"]).strip() != hid and norm_name(x["nombre"]) == norm_name(nombre) \
+                and norm_name(x.get("ciudad")) == norm_name(ciudad):
+            fail(f"ya existe otro hospital con ese nombre y ciudad: {x['nombre']} (id {x['id']})")
+
+
+def cmd_hosp_editar(args):
+    hospitals = api_get("hospitals").get("hospitals", [])
+    h = find_hospital(args.id, hospitals)
+    body = {"action": "update_hospital", "id": h["id"]}
+    for key in ("nombre", "ciudad", "direccion"):
+        val = getattr(args, key)
+        if val is not None and val.strip():
+            body[key] = val.strip()
+    check_name_free(hospitals, h["id"], body.get("nombre", h["nombre"]), body.get("ciudad", h.get("ciudad")))
+    if args.sin_ubicacion:
+        body["lat"] = body["lon"] = None
+    elif (args.lat is None) != (args.lon is None):
+        fail("indica latitud y longitud juntas")
+    elif args.lat is not None:
+        body["lat"], body["lon"] = args.lat, args.lon
+    th = {}
+    if args.pureza_alerta is not None:
+        th["o2_purity_warn"] = args.pureza_alerta
+    if args.pureza_critica is not None:
+        th["o2_purity_critical"] = args.pureza_critica
+    if th:
+        body["thresholds"] = th
+    flags = (("psa_enabled", args.psa), ("compressor_enabled", args.compresor), ("vacuum_enabled", args.vacio))
+    if any(v is not None for _, v in flags):
+        eq = {"psa_enabled": True, "compressor_enabled": True, "vacuum_enabled": True, **(h.get("equipment") or {})}
+        for key, val in flags:
+            if val is not None:
+                eq[key] = val
+        body["equipment"] = eq
+    if len(body) == 2:
+        fail("no hay cambios que guardar")
+    api_post(body)
+    print(f"{body.get('nombre', h['nombre'])}: cambios guardados.")
+
+
+def cmd_hosp_activo(args):
+    h = find_hospital(args.id)
+    activo = args.hcmd == "activar"
+    api_post({"action": "toggle_hospital", "id": h["id"], "activo": activo})
+    print(f"{h['nombre']} {'activado' if activo else 'desactivado'}.")
+
+
+def cmd_hosp_eliminar(args):
+    items = list_hospitals()
+    h = next((x for x in items if str(x["id"]).strip() == args.id.strip()), None)
+    if not h:
+        fail(f"no se encontró el hospital {args.id}")
+    if (args.confirmar or "").strip() != h["nombre"].strip():
+        fail(f"para eliminar escribe exactamente el nombre del hospital: {h['nombre']}")
+    api_post({"action": "delete_hospital", "id": h["id"]})
+    print(f"Hospital {h['nombre']} eliminado.")
+    if h.get("ultimo"):
+        print("⚠ Tenía lecturas: quedan en la hoja Registros con su id, sin hospital asociado.")
+    if h.get("equipos_inventario"):
+        print(f"⚠ Tiene {h['equipos_inventario']} equipo(s) en el inventario local: reasígnalos o quítalos.")
+
+
+def merge_plan(keep, dup, nombre=None, config_dup=False):
+    upd = {
+        "action": "update_hospital", "id": keep["id"],
+        "nombre": (nombre or (dup["nombre"] if len(dup["nombre"].strip()) > len(keep["nombre"].strip())
+                              else keep["nombre"])).strip(),
+        "ciudad": (keep.get("ciudad") or dup.get("ciudad") or "").strip(),
+        "direccion": (keep.get("direccion") or dup.get("direccion") or "").strip(),
+        "activo": True,
+        "thresholds": (dup if config_dup else keep).get("thresholds") or {},
+        "equipment": (dup if config_dup else keep).get("equipment") or {},
+    }
+    lat = keep.get("lat") if keep.get("lat") is not None else dup.get("lat")
+    lon = keep.get("lon") if keep.get("lon") is not None else dup.get("lon")
+    if lat is not None and lon is not None:
+        upd["lat"], upd["lon"] = lat, lon
+    avisos = []
+    if dup.get("ultimo"):
+        avisos.append(f"el duplicado recibió datos (último {dup['ultimo']}): cambia el HOSPITAL_ID de ese ESP32 a {keep['id']}")
+    inv = [e for e in load_inventory() if e["hospital_id"] == dup["id"]]
+    if inv:
+        avisos.append(f"{len(inv)} equipo(s) del inventario apuntan al duplicado: regenéralos con el hospital conservado")
+    for x in (keep, dup):
+        if not UUID_RE.match(str(x["id"]).strip()):
+            avisos.append(f"el id de {x['nombre']} no tiene formato UUID estándar: confírmalo con SIGGAM")
+    if "lat" not in upd:
+        avisos.append("ninguno de los dos tiene ubicación en el mapa")
+    return upd, avisos
+
+
+def cmd_hosp_fusionar(args):
+    if args.conservar.strip() == args.duplicado.strip():
+        fail("el hospital a conservar y el duplicado son el mismo")
+    items = list_hospitals()
+    keep = next((x for x in items if str(x["id"]).strip() == args.conservar.strip()), None)
+    dup = next((x for x in items if str(x["id"]).strip() == args.duplicado.strip()), None)
+    if not keep or not dup:
+        fail("no se encontró " + ("el hospital a conservar" if not keep else "el duplicado"))
+    upd, avisos = merge_plan(keep, dup, args.nombre, args.config_del_duplicado)
+    plan = {"conservar": {"id": keep["id"], "nombre_actual": keep["nombre"]},
+            "duplicado": {"id": dup["id"], "nombre": dup["nombre"]},
+            "resultado": {k: upd.get(k) for k in ("nombre", "ciudad", "direccion", "lat", "lon", "equipment", "thresholds")},
+            "avisos": avisos, "aplicado": False}
+    if args.aplicar:
+        api_post(upd)
+        api_post({"action": "toggle_hospital", "id": dup["id"], "activo": False})
+        plan["aplicado"] = True
+    if args.json:
+        print(json.dumps(plan, ensure_ascii=False))
+        return
+    r = plan["resultado"]
+    print(("HECHO" if plan["aplicado"] else "PLAN (no se modificó nada)") + ":")
+    print(f"  Conservar {keep['id']} → nombre '{r['nombre']}', ciudad '{r['ciudad']}', dirección '{r['direccion']}', "
+          f"ubicación {r.get('lat')}, {r.get('lon')}")
+    print(f"  Desactivar {dup['id']} ({dup['nombre']}), sin borrarlo")
+    for a in avisos:
+        print(f"  ⚠ {a}")
+
+
+def write_csv(text, salida):
+    data = "\ufeff" + text  # BOM: Excel abre bien los acentos
+    if salida:
+        salida = os.path.expanduser(salida)
+        with open(salida, "w", encoding="utf-8", newline="") as f:
+            f.write(data)
+        print(f"Exportado a {salida}")
+    else:
+        sys.stdout.write(data)
+
+
+def cmd_hosp_exportar(args):
+    cols = ["id", "nombre", "ciudad", "direccion", "lat", "lon", "activo", "psa", "compresor", "vacio",
+            "en_linea", "ultimo_dato", "unidades"]
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(cols)
+    for h in list_hospitals():
+        eq = h.get("equipment") or {}
+        w.writerow([h["id"], h["nombre"], h.get("ciudad") or "", h.get("direccion") or "",
+                    "" if h.get("lat") is None else h["lat"], "" if h.get("lon") is None else h["lon"],
+                    "sí" if h.get("activo") else "no",
+                    *["sí" if eq.get(k) is not False else "no" for k in ("psa_enabled", "compressor_enabled", "vacuum_enabled")],
+                    "sí" if h.get("en_linea") else "no", h.get("ultimo") or "",
+                    " ".join(u["unit_id"] or "" for u in h.get("unidades", []))])
+    write_csv(buf.getvalue(), args.salida)
+
+
 def cmd_firmware_mpy(args):
     args.desde = os.path.expanduser(args.desde.strip())
     if not os.path.isfile(args.desde) or not args.desde.endswith(".bin"):
@@ -858,11 +1067,13 @@ def main():
     s.add_argument("--api-url")
     s.add_argument("--device-token", action="store_true", help="pedir (o leer por stdin) el DEVICE_TOKEN")
     s.add_argument("--admin-token", action="store_true", help="pedir (o leer por stdin) el ADMIN_TOKEN")
+    s.add_argument("--dashboard-url", help="URL del dashboard web (para los accesos directos)")
     s.set_defaults(fn=cmd_config_global)
 
-    s = sub.add_parser("wifi", help="guardar el WiFi de un hospital (la contraseña se pide oculta)")
+    s = sub.add_parser("wifi", help="guardar (o --eliminar) el WiFi de un hospital (la contraseña se pide oculta)")
     s.add_argument("--hospital-id", required=True)
     s.add_argument("--ssid")
+    s.add_argument("--eliminar", action="store_true")
     s.set_defaults(fn=cmd_wifi)
 
     s = sub.add_parser("importar", help="importar configuración de un secrets.h que ya funciona")
@@ -919,9 +1130,14 @@ def main():
     s.add_argument("--sin-reiniciar", action="store_true", help="no reiniciar el ESP32 al empezar")
     s.set_defaults(fn=cmd_verificar)
 
-    s = sub.add_parser("inventario", help="listar los equipos generados")
+    s = sub.add_parser("inventario", help="listar, exportar o quitar equipos del inventario")
     s.add_argument("--hospital-id")
     s.add_argument("--json", action="store_true")
+    s.add_argument("--eliminar", action="store_true", help="quitar un equipo (con --hospital-id y --unidad)")
+    s.add_argument("--unidad")
+    s.add_argument("--borrar-carpeta", action="store_true", help="con --eliminar: borrar también su carpeta")
+    s.add_argument("--exportar", choices=["csv"])
+    s.add_argument("--salida", help="archivo de salida del CSV (por defecto, pantalla)")
     s.set_defaults(fn=cmd_inventario)
 
     s = sub.add_parser("hospitales", help="consultar, crear y configurar hospitales en el backend")
@@ -953,6 +1169,39 @@ def main():
     h.add_argument("--compresor", action=argparse.BooleanOptionalAction, default=None)
     h.add_argument("--vacio", action=argparse.BooleanOptionalAction, default=None)
     h.set_defaults(fn=cmd_hosp_equipos)
+    h = hs.add_parser("editar", help="editar datos de un hospital (el id no cambia)")
+    h.add_argument("--id", required=True)
+    h.add_argument("--nombre")
+    h.add_argument("--ciudad")
+    h.add_argument("--direccion")
+    h.add_argument("--lat", type=float)
+    h.add_argument("--lon", type=float)
+    h.add_argument("--sin-ubicacion", action="store_true", help="quitar la ubicación del mapa")
+    h.add_argument("--pureza-alerta", type=float)
+    h.add_argument("--pureza-critica", type=float)
+    h.add_argument("--psa", action=argparse.BooleanOptionalAction, default=None)
+    h.add_argument("--compresor", action=argparse.BooleanOptionalAction, default=None)
+    h.add_argument("--vacio", action=argparse.BooleanOptionalAction, default=None)
+    h.set_defaults(fn=cmd_hosp_editar)
+    for name in ("activar", "desactivar"):
+        h = hs.add_parser(name, help=f"{name} un hospital")
+        h.add_argument("--id", required=True)
+        h.set_defaults(fn=cmd_hosp_activo)
+    h = hs.add_parser("eliminar", help="eliminar definitivamente (escribiendo su nombre)")
+    h.add_argument("--id", required=True)
+    h.add_argument("--confirmar", required=True, help="nombre exacto del hospital")
+    h.set_defaults(fn=cmd_hosp_eliminar)
+    h = hs.add_parser("fusionar", help="conservar un hospital y desactivar su duplicado")
+    h.add_argument("--conservar", required=True, help="id que se conserva (el sensorMspbsId de SIGGAM)")
+    h.add_argument("--duplicado", required=True)
+    h.add_argument("--nombre", help="nombre final (por defecto, el más largo)")
+    h.add_argument("--config-del-duplicado", action="store_true", help="usar umbrales y equipos del duplicado")
+    h.add_argument("--aplicar", action="store_true", help="sin esto solo muestra el plan")
+    h.add_argument("--json", action="store_true")
+    h.set_defaults(fn=cmd_hosp_fusionar)
+    h = hs.add_parser("exportar", help="exportar hospitales a CSV")
+    h.add_argument("--salida", help="archivo (por defecto, pantalla)")
+    h.set_defaults(fn=cmd_hosp_exportar)
 
     s = sub.add_parser("firmware-mpy", help="guardar el .bin de MicroPython para equipos de sensores")
     s.add_argument("--desde", required=True)

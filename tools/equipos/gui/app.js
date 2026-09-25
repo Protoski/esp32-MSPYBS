@@ -11,7 +11,8 @@ const DIAG = {
   sin_datos: ['warn', 'No se vio ningún envío: verifica de nuevo con más tiempo y comprueba que el puerto USB sea el correcto.'],
 };
 
-const state = { hospitales: [], inventario: [], estado: null, puertos: [], job: null, jobOffset: 0, map: null, marker: null };
+const state = { hospitales: [], inventario: [], estado: null, puertos: [], job: null, jobOffset: 0, map: null, marker: null,
+  editHospital: null, editUnit: null };
 
 // ── utilidades ─────────────────────────────────────────────────────────────
 function el(tag, attrs = {}, ...kids) {
@@ -64,6 +65,27 @@ function formData(form) {
   }
   return d;
 }
+async function downloadCsv(path) {
+  try {
+    const r = await fetch(path, { headers: { 'X-Token': TOKEN } });
+    const ct = r.headers.get('Content-Type') || '';
+    if (!ct.startsWith('text/csv')) { const j = await r.json(); return toast(j.error || 'No se pudo exportar', 'bad'); }
+    const name = (r.headers.get('Content-Disposition') || '').match(/filename="([^"]+)"/)?.[1] || 'export.csv';
+    const url = URL.createObjectURL(await r.blob());
+    const a = el('a', { href: url, download: name });
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    toast(`Descargado ${name}`);
+  } catch (e) { toast('No se pudo exportar', 'bad'); }
+}
+function panel(title, ...content) {
+  const box = $('#dups');
+  box.classList.remove('hidden');
+  box.replaceChildren(el('div', { class: 'row between' }, el('h2', {}, title),
+    el('button', { type: 'button', class: 'small', onclick: () => box.classList.add('hidden') }, 'Cerrar')), ...content);
+  box.scrollIntoView({ behavior: 'smooth' });
+  return box;
+}
 function stBadge(ok, yes = 'ok', no = 'falta') { return el('span', { class: ok ? 'st-ok' : 'st-bad' }, ok ? yes : no); }
 
 // ── pestañas ───────────────────────────────────────────────────────────────
@@ -114,6 +136,8 @@ async function loadEstado() {
   $('#st-admin').textContent = e.admin_token ? '· guardado' : '· falta (necesario para crear hospitales)';
   $('#cfg-url').placeholder = e.api_url_final ? `guardada: …${e.api_url_final}` : 'https://script.google.com/macros/s/…/exec';
   $('#mpy-actual').textContent = e.micropython_bin ? e.micropython_bin.split('/').pop() : 'ninguno';
+  $('#st-dash').textContent = `· actual: ${e.dashboard_url}`;
+  renderWifiList();
   $('#config-list').replaceChildren(
     el('li', {}, 'URL del backend', stBadge(!!e.api_url_final, 'guardada')),
     el('li', {}, 'DEVICE_TOKEN', stBadge(e.device_token, 'guardado')),
@@ -121,6 +145,23 @@ async function loadEstado() {
     el('li', {}, 'WiFi de hospitales', el('span', { class: 'st-ok' }, String(e.wifi.length))),
     el('li', {}, 'Firmware MicroPython', el('span', { class: e.micropython_bin ? 'st-ok' : 'muted' }, e.micropython_bin ? 'listo' : 'no cargado')),
   );
+}
+
+function hospitalName(id) { return state.hospitales.find((h) => h.id === id)?.nombre || id; }
+function renderWifiList() {
+  const ul = $('#wifi-list');
+  const list = state.estado?.wifi || [];
+  if (!list.length) return ul.replaceChildren(el('li', { class: 'muted' }, 'Ninguno. Se guardan desde Hospitales → WiFi.'));
+  ul.replaceChildren(...list.map((w) => el('li', {},
+    el('span', {}, el('b', {}, hospitalName(w.hospital_id)), el('span', { class: 'muted' }, ` · red "${w.ssid}"`)),
+    el('span', { class: 'actions' },
+      el('button', { class: 'small', onclick: () => { const h = state.hospitales.find((x) => x.id === w.hospital_id); if (h) { showTab('hospitales'); editWifi(h); } else toast('Hospital no encontrado', 'bad'); } }, 'Editar'),
+      el('button', { class: 'small', onclick: async () => {
+        if (!confirm(`¿Eliminar el WiFi "${w.ssid}" de ${hospitalName(w.hospital_id)}? Los equipos ya programados no cambian.`)) return;
+        const r = await api('/api/wifi/eliminar', { hospital_id: w.hospital_id });
+        toast(r.ok ? r.salida : r.error, r.ok ? 'ok' : 'bad');
+        if (r.ok) { await loadEstado(); loadHospitales(); }
+      } }, 'Eliminar')))));
 }
 
 $('#btn-instalar').addEventListener('click', async () => {
@@ -143,6 +184,7 @@ $('#form-config').addEventListener('submit', async (ev) => {
   if (d.api_url) body.api_url = d.api_url;
   if (d.device_token) body.device_token = d.device_token;
   if (d.admin_token) body.admin_token = d.admin_token;
+  if (d.dashboard_url) body.dashboard_url = d.dashboard_url;
   if (!Object.keys(body).length) return toast('No hay cambios que guardar', 'bad');
   const r = await api('/api/config', body);
   if (!r.ok) return toast(r.error, 'bad');
@@ -203,8 +245,9 @@ function eqBadges(eq = {}) {
 
 function renderHospitales() {
   const q = $('#h-buscar').value.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-  const rows = state.hospitales.filter((h) => !q || `${h.nombre} ${h.ciudad} ${h.id}`.toLowerCase()
-    .normalize('NFD').replace(/[̀-ͯ]/g, '').includes(q));
+  const filtro = $('#h-filtro').value;
+  const rows = state.hospitales.filter((h) => (filtro === 'todos' || (filtro === 'activos') === !!h.activo)
+    && (!q || `${h.nombre} ${h.ciudad} ${h.id}`.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').includes(q)));
   const tb = $('#tbl-hospitales tbody');
   if (!rows.length) return tb.replaceChildren(el('tr', {}, el('td', { colspan: 6, class: 'muted' }, 'Sin hospitales')));
   tb.replaceChildren(...rows.map((h) => el('tr', {},
@@ -218,9 +261,15 @@ function renderHospitales() {
       u.unit_id || 'equipo')) : el('span', { class: 'muted small' }, '—')),
     el('td', {}, el('span', { class: `badge ${h.wifi_guardado ? 'ok' : 'warn'}` }, h.wifi_guardado ? 'guardado' : 'falta')),
     el('td', {}, el('div', { class: 'actions' },
+      el('button', { class: 'small', onclick: () => openHospitalForm(h) }, 'Editar'),
       el('button', { class: 'small', onclick: () => editEquipos(h) }, 'Equipos'),
       el('button', { class: 'small', onclick: () => editWifi(h) }, 'WiFi'),
-      el('button', { class: 'small primary', onclick: () => nuevoEquipo(h.id) }, '+ Equipo'))),
+      h.activo && el('button', { class: 'small primary', onclick: () => nuevoEquipo(h.id) }, '+ Equipo')),
+    el('div', { class: 'actions', style: 'margin-top:4px' },
+      el('button', { class: 'small', title: 'Abrir en el dashboard web', onclick: () => window.open(`${state.estado?.dashboard_url || 'https://esp32-mspybs.vercel.app'}/hospital/${encodeURIComponent(h.id)}`, '_blank', 'noopener') }, 'Dashboard'),
+      h.lat != null && el('button', { class: 'small', title: 'Ver ubicación en Google Maps', onclick: () => window.open(`https://www.google.com/maps?q=${h.lat},${h.lon}`, '_blank', 'noopener') }, 'Mapa'),
+      el('button', { class: 'small', onclick: () => setActivo(h, !h.activo) }, h.activo ? 'Desactivar' : 'Activar'),
+      el('button', { class: 'small danger', onclick: () => eliminarHospital(h) }, 'Eliminar'))),
   )));
 }
 
@@ -235,6 +284,38 @@ function fillHospitalSelects() {
 }
 
 $('#h-buscar').addEventListener('input', renderHospitales);
+$('#h-filtro').addEventListener('change', renderHospitales);
+$('#btn-h-export').addEventListener('click', () => downloadCsv('/api/exportar/hospitales'));
+
+async function setActivo(h, activo) {
+  if (!activo && !confirm(`¿Desactivar ${h.nombre}? Deja de aparecer como activo y sus alarmas no se evalúan. Se puede reactivar.`)) return;
+  const r = await api('/api/hospitales/activo', { id: h.id, activo });
+  toast(r.ok ? r.salida : r.error, r.ok ? 'ok' : 'bad');
+  if (r.ok) loadHospitales();
+}
+
+function eliminarHospital(h) {
+  const input = el('input', { placeholder: h.nombre, autocomplete: 'off' });
+  const btn = el('button', { class: 'danger', disabled: true }, 'Eliminar definitivamente');
+  input.addEventListener('input', () => { btn.disabled = input.value.trim() !== h.nombre.trim(); });
+  const avisos = [
+    h.unidades.length && `Tiene ${h.unidades.length} equipo(s) que enviaron datos (${h.unidades.map((u) => u.unit_id || 'equipo').join(', ')}).`,
+    h.ultimo && `Último dato: ${fmtDate(h.ultimo)}. Sus lecturas quedan en la hoja sin hospital asociado.`,
+    h.equipos_inventario && `Hay ${h.equipos_inventario} equipo(s) en tu inventario local apuntando a este hospital.`,
+    'Si su id es el sensorMspbsId de SIGGAM, SIGGAM dejará de encontrarlo.',
+  ].filter(Boolean);
+  btn.addEventListener('click', async () => {
+    const r = await api('/api/hospitales/eliminar', { id: h.id, confirmar: input.value });
+    toast(r.ok ? r.salida : r.error, r.ok ? 'ok' : 'bad');
+    if (r.ok) { $('#dups').classList.add('hidden'); loadHospitales(); }
+  });
+  panel(`Eliminar ${h.nombre}`,
+    el('div', { class: 'diag bad' }, el('b', {}, 'Esto no se puede deshacer. '), 'Normalmente es mejor Desactivar.',
+      ...avisos.map((a) => el('div', {}, `⚠ ${a}`))),
+    el('label', {}, `Para confirmar escribe el nombre exacto: ${h.nombre}`, input),
+    el('div', { class: 'row' }, btn, el('button', { onclick: () => { $('#dups').classList.add('hidden'); setActivo(h, false); } }, 'Desactivar en su lugar')));
+  input.focus();
+}
 $('#btn-h-refresh').addEventListener('click', loadHospitales);
 
 $('#btn-h-dups').addEventListener('click', async () => {
@@ -247,14 +328,50 @@ $('#btn-h-dups').addEventListener('click', async () => {
   box.replaceChildren(...[
     el('div', { class: 'row between' }, el('h2', {}, 'Revisión de duplicados'),
       el('button', { class: 'small', onclick: () => box.classList.add('hidden') }, 'Cerrar')),
-    grupos.length ? el('p', { class: 'muted small' }, 'Conserva el que tenga el ID de SIGGAM (y al que envían sus ESP32) y desactiva el otro desde el panel web o con Claude (merge_hospitals).')
+    grupos.length ? el('p', { class: 'muted small' }, 'Elige cuál conservar: el que tenga el ID de SIGGAM (suele ser el que tiene dirección y ubicación). Los demás se desactivan, no se borran.')
       : el('p', { class: 'st-ok' }, 'No hay posibles duplicados.'),
-    ...grupos.map((g) => el('div', { class: 'subcard', style: 'margin-bottom:8px' },
-      ...g.map((h) => el('div', {}, el('b', {}, h.nombre), ` (${h.ciudad || 'sin ciudad'}) `, el('span', { class: 'id' }, h.id),
-        el('span', { class: 'muted small' }, ` · alta ${fmtDate(h.created_at)} · ${h.lat != null ? 'con ubicación' : 'sin ubicación'} · ${h.ultimo ? 'último dato ' + fmtDate(h.ultimo) : 'nunca recibió datos'}`))))),
+    ...grupos.map((g, gi) => grupoFusion(g, gi)),
     bad.length ? el('p', { class: 'warn' }, 'IDs sin formato UUID (confirmar con SIGGAM): ', bad.map((h) => `${h.nombre}: ${h.id}`).join(' · ')) : null,
   ].filter(Boolean));
 });
+
+function grupoFusion(g, gi) {
+  // Preselección: con ubicación, luego con datos, luego nombre más largo
+  const score = (h) => (h.lat != null ? 4 : 0) + (h.ultimo ? 2 : 0) + h.nombre.length / 1000;
+  const best = g.slice().sort((a, b) => score(b) - score(a))[0];
+  const name = `keep-${gi}`;
+  const cfg = el('input', { type: 'checkbox' });
+  const out = el('div', { class: 'stack' });
+  const keepId = () => document.querySelector(`input[name="${name}"]:checked`)?.value;
+  const run = async (aplicar) => {
+    const keep = keepId();
+    const dups = g.filter((h) => h.id !== keep);
+    if (aplicar && !confirm(`Conservar "${g.find((h) => h.id === keep).nombre}" y desactivar ${dups.length} duplicado(s)?`)) return;
+    out.replaceChildren(el('p', { class: 'muted' }, aplicar ? 'Fusionando…' : 'Calculando plan…'));
+    const res = [];
+    for (const d of dups) {
+      const r = await api('/api/hospitales/fusionar', { conservar: keep, duplicado: d.id, config_del_duplicado: cfg.checked, aplicar });
+      if (!r.ok) { out.replaceChildren(el('div', { class: 'diag bad' }, r.error)); return; }
+      res.push(r.data);
+    }
+    const p = res[0].resultado;
+    out.replaceChildren(el('div', { class: `diag ${aplicar ? 'ok' : 'warn'}` },
+      el('b', {}, aplicar ? 'Fusión hecha. ' : 'Plan (todavía no se modificó nada): '),
+      el('div', {}, `Se conserva ${keep} con nombre "${p.nombre}", ciudad "${p.ciudad}", dirección "${p.direccion}", ubicación ${p.lat != null ? `${p.lat}, ${p.lon}` : 'sin ubicación'}.`),
+      el('div', {}, `Se desactiva${res.length > 1 ? 'n' : ''}: ${res.map((x) => `${x.duplicado.nombre} (${x.duplicado.id})`).join(', ')}.`),
+      ...[...new Set(res.flatMap((x) => x.avisos))].map((a) => el('div', { class: 'warn' }, `⚠ ${a}`))));
+    if (aplicar) loadHospitales();
+  };
+  return el('div', { class: 'subcard', style: 'margin-bottom:10px' },
+    ...g.map((h) => el('label', { class: 'inline', style: 'align-items:flex-start' },
+      el('input', { type: 'radio', name, value: h.id, checked: h.id === best.id }),
+      el('span', {}, el('b', {}, h.nombre), ` (${h.ciudad || 'sin ciudad'}) `, el('span', { class: 'id' }, h.id),
+        el('span', { class: 'muted small' }, ` · alta ${fmtDate(h.created_at)} · ${h.lat != null ? 'con ubicación' : 'sin ubicación'} · ${h.ultimo ? 'último dato ' + fmtDate(h.ultimo) : 'nunca recibió datos'}`)))),
+    el('label', { class: 'inline small' }, cfg, 'Usar umbrales y equipos del duplicado'),
+    el('div', { class: 'row' }, el('button', { class: 'small', onclick: () => run(false) }, 'Ver plan'),
+      el('button', { class: 'small primary', onclick: () => run(true) }, 'Fusionar')),
+    out);
+}
 
 async function editEquipos(h) {
   const eq = h.equipment || {};
@@ -323,14 +440,38 @@ function updateGmapsLink() {
   const f = $('#form-hospital');
   $('#lnk-gmaps').href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${f.nombre.value} ${f.ciudad.value} Paraguay`)}`;
 }
-$('#btn-h-nuevo').addEventListener('click', () => {
-  $('#form-hospital').classList.remove('hidden');
+function openHospitalForm(h) {
+  const f = $('#form-hospital');
+  f.reset();
+  state.editHospital = h || null;
+  $('#fh-title').textContent = h ? `Editar ${h.nombre}` : 'Nuevo hospital';
+  $('#fh-submit').textContent = h ? 'Guardar cambios' : 'Crear hospital';
+  $('#fh-id').textContent = h ? `id ${h.id} (no se puede cambiar: es el sensorMspbsId de SIGGAM)` : '';
+  $('#fh-id').classList.toggle('hidden', !h);
+  f.elements.id.disabled = !!h;
+  $('#fh-id-hint').textContent = h ? '(no editable)' : '(si ya existe)';
+  $('#lbl-sin-ubic').classList.toggle('hidden', !h || h.lat == null);
+  $('#lbl-distinto').classList.add('hidden');
+  if (state.marker) { state.marker.remove(); state.marker = null; }
+  if (h) {
+    f.nombre.value = h.nombre || ''; f.ciudad.value = (h.ciudad || '').trim(); f.direccion.value = h.direccion || '';
+    f.elements.id.value = h.id;
+    const eq = h.equipment || {};
+    f.psa.checked = eq.psa_enabled !== false; f.compresor.checked = eq.compressor_enabled !== false; f.vacio.checked = eq.vacuum_enabled !== false;
+    f.pureza_alerta.value = h.thresholds?.o2_purity_warn ?? 93; f.pureza_critica.value = h.thresholds?.o2_purity_critical ?? 90;
+  }
+  f.classList.remove('hidden');
   initMap();
-  setTimeout(() => state.map?.invalidateSize(), 60);
+  setTimeout(() => {
+    state.map?.invalidateSize();
+    if (h && h.lat != null) setLatLon(Number(h.lat), Number(h.lon)); else state.map?.setView([-23.5, -58.4], 6);
+  }, 60);
   updateGmapsLink();
-  $('#form-hospital').nombre.focus();
-});
-$('#btn-h-cancelar').addEventListener('click', () => { $('#form-hospital').classList.add('hidden'); });
+  f.scrollIntoView({ behavior: 'smooth' });
+  f.nombre.focus();
+}
+$('#btn-h-nuevo').addEventListener('click', () => openHospitalForm(null));
+$('#btn-h-cancelar').addEventListener('click', () => { $('#form-hospital').classList.add('hidden'); state.editHospital = null; });
 ['nombre', 'ciudad'].forEach((n) => $('#form-hospital').elements[n].addEventListener('input', updateGmapsLink));
 ['lat', 'lon'].forEach((n) => $('#form-hospital').elements[n].addEventListener('change', () => {
   const f = $('#form-hospital');
@@ -344,6 +485,17 @@ $('#form-hospital').addEventListener('submit', async (ev) => {
   const d = formData(f);
   d.lat = d.lat.replace(',', '.');
   d.lon = d.lon.replace(',', '.');
+  if (state.editHospital) {
+    const h = state.editHospital;
+    const body = { id: h.id, nombre: d.nombre, ciudad: d.ciudad, direccion: d.direccion,
+      pureza_alerta: d.pureza_alerta, pureza_critica: d.pureza_critica, psa: d.psa, compresor: d.compresor, vacio: d.vacio };
+    if (d.sin_ubicacion) body.sin_ubicacion = true;
+    else if (d.lat && d.lon && (Number(d.lat) !== Number(h.lat) || Number(d.lon) !== Number(h.lon))) Object.assign(body, { lat: d.lat, lon: d.lon });
+    const r = await api('/api/hospitales/editar', body);
+    toast(r.ok ? r.salida : r.error, r.ok ? 'ok' : 'bad');
+    if (r.ok) { f.classList.add('hidden'); state.editHospital = null; await loadHospitales(); }
+    return;
+  }
   if (!d.lat || !d.lon) {
     if (!confirm('No indicaste la ubicación. ¿Crear el hospital sin coordenadas? (no aparecerá en el mapa del dashboard)')) return;
   }
@@ -385,7 +537,11 @@ async function loadInventario() {
         el('button', { class: 'small primary', onclick: () => trabajo('subir', e) }, 'Subir'),
         el('button', { class: 'small', onclick: () => trabajo('verificar', e) }, 'Verificar'),
         el('button', { class: 'small', onclick: () => trabajo('actualizar', e) }, 'Actualizar firmware'),
-        el('button', { class: 'small', onclick: async () => { const r = await api('/api/abrir', { carpeta: e.carpeta }); if (!r.ok) toast(r.error, 'bad'); } }, 'Abrir carpeta'))),
+        el('button', { class: 'small', onclick: async () => { const r = await api('/api/abrir', { carpeta: e.carpeta }); if (!r.ok) toast(r.error, 'bad'); } }, 'Abrir carpeta')),
+      el('div', { class: 'actions', style: 'margin-top:4px' },
+        el('button', { class: 'small', onclick: () => equipoForm(e, 'editar') }, 'Editar'),
+        el('button', { class: 'small', onclick: () => equipoForm(e, 'duplicar') }, 'Duplicar'),
+        el('button', { class: 'small danger', onclick: () => quitarEquipo(e) }, 'Quitar'))),
     )));
 }
 
@@ -406,6 +562,7 @@ async function trabajo(tipo, e) {
 
 // Asistente de nuevo equipo
 function nuevoEquipo(hospitalId) {
+  resetEquipoForm();
   showTab('equipos');
   const f = $('#form-equipo');
   f.classList.remove('hidden');
@@ -414,6 +571,51 @@ function nuevoEquipo(hospitalId) {
   f.scrollIntoView({ behavior: 'smooth' });
 }
 $('#btn-e-nuevo').addEventListener('click', () => nuevoEquipo());
+$('#btn-e-export').addEventListener('click', () => downloadCsv('/api/exportar/inventario'));
+
+function resetEquipoForm() {
+  const f = $('#form-equipo');
+  f.reset();
+  state.editUnit = null;
+  f.unidad.readOnly = false;
+  $('#fe-title').textContent = 'Nuevo equipo';
+}
+
+// Editar: regenera la carpeta con "Reemplazar". Duplicar: mismos datos, siguiente UNIT_ID.
+function equipoForm(e, modo) {
+  resetEquipoForm();
+  const f = $('#form-equipo');
+  showTab('equipos');
+  f.classList.remove('hidden');
+  f.hospital_id.value = e.hospital_id;
+  const tipo = e.unit_type || 'o2';
+  f.querySelector(`input[name=tipo][value="${tipo}"]`)?.click();
+  f.marca.value = e.marca || '';
+  f.querySelector(`input[name=firmware][value="${e.firmware === 'plc' ? 'plc' : 'sensores'}"]`).checked = true;
+  if (e.eth_ip) f.eth_ip.value = String(e.eth_ip).split('.').pop();
+  if (e.plc_ip) f.plc_ip.value = String(e.plc_ip).split('.').pop();
+  f.leer_plc.checked = !!e.lee_plc;
+  if (modo === 'editar') {
+    state.editUnit = e.unit_id;
+    f.unidad.value = e.unit_id;
+    f.unidad.readOnly = true;
+    f.reemplazar.checked = true;
+    $('#fe-title').textContent = `Editar ${e.unit_id} — regenera su carpeta (después, vuelve a subirlo)`;
+    onEquipoChange(false);
+  } else {
+    $('#fe-title').textContent = `Nuevo equipo (copia de ${e.unit_id})`;
+    onEquipoChange('tipo');
+  }
+  f.scrollIntoView({ behavior: 'smooth' });
+}
+
+async function quitarEquipo(e) {
+  if (!confirm(`¿Quitar ${e.unit_id} (${e.hospital_nombre}) del inventario?\nNo cambia el ESP32 ni el backend.`)) return;
+  const borrar = confirm(`¿Borrar también su carpeta?\n${e.carpeta}\n\nAceptar = borrar carpeta · Cancelar = conservarla`);
+  const r = await api('/api/inventario/eliminar', { hospital_id: e.hospital_id, unidad: e.unit_id, borrar_carpeta: borrar });
+  toast(r.ok ? r.salida : r.error, r.ok ? 'ok' : 'bad');
+  if (r.ok) loadInventario();
+}
 $('#btn-e-cancelar').addEventListener('click', () => $('#form-equipo').classList.add('hidden'));
 $('#btn-e-refresh').addEventListener('click', () => { loadInventario(); loadPorts(); });
 
@@ -441,7 +643,7 @@ async function onEquipoChange(suggest) {
   $('#wifi-estado').textContent = !h ? 'Elige un hospital.' : wifiSaved ? `Guardado: red "${wifiSaved.ssid}".` : 'Falta el WiFi de este hospital: ingrésalo aquí.';
   $('#wifi-form').classList.toggle('hidden', !h || !!wifiSaved);
 
-  if (suggest === true || suggest === 'tipo' || suggest === 'hospital') {
+  if (!state.editUnit && (suggest === true || suggest === 'tipo' || suggest === 'hospital')) {
     if (h) {
       const r = await api(`/api/siguiente?hospital_id=${encodeURIComponent(h.id)}&tipo=${d.tipo}`);
       if (r.ok) f.unidad.value = r.data;
@@ -493,10 +695,11 @@ fe.addEventListener('submit', async (ev) => {
   else Object.assign(params, { tipo: d.tipo, leer_plc: d.leer_plc, eth_ip: d.leer_plc ? 20 : undefined });
   const r = await api('/api/trabajos', { tipo, params });
   if (!r.ok) return toast(r.error, 'bad');
-  followJob(r.trabajo, `Generar ${params.unidad}`, (job) => {
+  followJob(r.trabajo, `${state.editUnit ? 'Regenerar' : 'Generar'} ${params.unidad}`, (job) => {
     loadInventario();
     if (job.estado === 'ok') {
       fe.classList.add('hidden');
+      resetEquipoForm();
       showTab('equipos');
       toast(`Carpeta de ${params.unidad} lista. Conecta ese ESP32 y pulsa "Subir".`);
     }

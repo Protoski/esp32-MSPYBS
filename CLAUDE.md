@@ -66,8 +66,10 @@ en 127.0.0.1 con token por arranque; menús Inicio, Configuración, Hospitales,
 Equipos, Registro; ver `tools/equipos/README.md`). Motor común:
 `tools/equipos/equipos.py` (check, config-global, wifi, importar, estado,
 siguiente-unidad, generar-plc, generar-sensores, subir, actualizar, verificar,
-inventario, hospitales listar/duplicados/crear/equipos, firmware-mpy; `--json` en
-estado, inventario, check y hospitales). `global.env` guarda también `ADMIN_TOKEN`
+inventario [--eliminar|--exportar], wifi [--eliminar], hospitales
+listar/duplicados/crear/editar/activar/desactivar/eliminar/fusionar/exportar/equipos,
+firmware-mpy; `--json` en estado, inventario, check y hospitales). `fusionar` replica
+`merge_hospitals` del MCP (plan por defecto, `--aplicar` para ejecutar). `global.env` guarda también `ADMIN_TOKEN`
 para crear hospitales desde la GUI. Configuración local en `~/.config/mspybs/` (permisos 600):
 `global.env` (API_URL, DEVICE_TOKEN), `wifi/<hospital_id>.env` y el inventario
 `equipos.json`. Las carpetas de equipos se generan en `~/Escritorio/equipos/`. Los
