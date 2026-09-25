@@ -35,10 +35,12 @@ export function loadLeaflet(): Promise<any> {
 export const PY_CENTER: [number, number] = [-23.5, -58.4];
 export const PY_ZOOM = 6;
 
-// Capas de mosaicos gratuitas
+// Capas de mosaicos gratuitas y sin clave (CARTO pasó a exigir API key).
+// El gris oscuro de Esri tiene detalle hasta zoom 16; más cerca se amplía.
 export const TILE_DARK = {
-  url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+  url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+  labels: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
+  attribution: 'Tiles &copy; Esri — Esri, HERE, Garmin, &copy; OpenStreetMap contributors',
 };
 export const TILE_STREETS = {
   url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -51,7 +53,10 @@ export const TILE_SATELLITE = {
 
 // Crea el mapa con las 3 capas (Oscuro / Calles / Satélite) y control de capas
 export function createBaseMap(L: any, el: HTMLElement, opts: any = {}) {
-  const dark      = L.tileLayer(TILE_DARK.url,      { attribution: TILE_DARK.attribution, maxZoom: 20 });
+  const dark      = L.layerGroup([
+    L.tileLayer(TILE_DARK.url,    { attribution: TILE_DARK.attribution, maxNativeZoom: 16, maxZoom: 20 }),
+    L.tileLayer(TILE_DARK.labels, { maxNativeZoom: 16, maxZoom: 20 }),
+  ]);
   const streets   = L.tileLayer(TILE_STREETS.url,   { attribution: TILE_STREETS.attribution, maxZoom: 19 });
   const satellite = L.tileLayer(TILE_SATELLITE.url, { attribution: TILE_SATELLITE.attribution, maxZoom: 19 });
   const map = L.map(el, {

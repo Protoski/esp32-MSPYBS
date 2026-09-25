@@ -15,11 +15,12 @@ export default function Navbar() {
   return (
     <nav className="sticky top-0 z-50 border-b border-slate-800 bg-slate-900/80 backdrop-blur-md">
       <div className="max-w-screen-2xl mx-auto px-4 md:px-6 flex items-center justify-between h-14">
-        <Link href="/" className="flex items-center gap-2 group">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center text-white text-sm font-black">M</div>
-          <span className="font-black text-slate-100 tracking-tight hidden sm:block">MSPYBS</span>
-          <span className="text-slate-600 hidden sm:block text-xs">|</span>
-          <span className="text-slate-500 hidden sm:block text-xs">Gases Medicinales</span>
+        <Link href="/" className="flex items-center gap-3 group min-w-0">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo-mspbs.jpg" alt="Ministerio de Salud Pública y Bienestar Social — Paraguay"
+            className="h-9 w-auto rounded-md bg-white px-1.5 py-0.5 flex-shrink-0" />
+          <span className="text-slate-600 hidden md:block text-xs">|</span>
+          <span className="text-slate-400 hidden md:block text-xs font-semibold">Monitor de Gases Medicinales</span>
         </Link>
         <div className="flex items-center gap-1">
           {links.map(({ href, label, icon }) => (
